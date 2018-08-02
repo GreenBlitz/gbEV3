@@ -4,15 +4,14 @@
     <Console name="Console" target="SYSTEM_OUT">
       <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
     </Console>
-    <RandomAccessFile name="AsyncLoggingFile" fileName="commandbased.log" immediateFlush="false" append="false">
+    <File name="CommandBasedLogFile" fileName="commandbased.log">
       	<PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
-    </RandomAccessFile>
+    </File>
   </Appenders>
   <Loggers>
     <Root level="error">
-      <AppenderRef ref="AsyncLoggingFile"/>
+      <AppenderRef ref="CommandBasedLogFile"/>
     </Root>
-    <AsyncLogger name="commandBased" level="trace">
-    </AsyncLogger>
+    <Logger name="commandBased" level="trace"/>
   </Loggers>
 </Configuration>
