@@ -108,7 +108,6 @@ public abstract class Command {
 		if (subsystem == null)
 			return false;
 
-		System.out.println("requires" + subsystem);
 		m_requirements.add(subsystem);
 		return true;
 	}

@@ -7,6 +7,10 @@ public class Main {
 		Scheduler.getInstance().registerSubsystem(IntegerSubsystem.getInstance());
 		int count = 0;
 		while(count++ < 1000) Scheduler.getInstance().run();
-		System.out.println(IntegerSubsystem.getInstance().getValue());
+		System.out.println(In
+				tegerSubsystem.getInstance().getValue());
+		
+		hahahaha this.wont(compile)
+		please use a standard testing method and not this.shit
 	}
 }

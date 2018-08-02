@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.greenblitz.gbEV3.StationAccessor;
+import org.greenblitz.gbEV3.common.StationAccessor;
 
 public final class Scheduler {
 	private static final Scheduler instance = new Scheduler();

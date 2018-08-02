@@ -1,4 +1,4 @@
-package org.greenblitz.gbEV3;
+package org.greenblitz.gbEV3.common;
 
 public final class StationAccessor {
 	

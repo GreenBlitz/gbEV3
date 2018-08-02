@@ -1,4 +1,6 @@
-package org.greenblitz.gbEV3;
+package org.greenblitz.gbEV3.commandbased;
+
+import org.greenblitz.gbEV3.common.StationAccessor;
 
 public abstract class Robot {
 
