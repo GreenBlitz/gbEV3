@@ -157,6 +157,7 @@ public class RobotBase {
 		
 		try{
 			logger.info("Robot running!");
+			logger.info("Hello John, Im ev3");
 			Sound.beep();
 			
 			INSTANCE.robotInit();
