@@ -1,19 +1,26 @@
 package org.greenblitz.gbEV3.common;
 
+
 public final class StationAccessor {
 	
 	public static StationAccessor getInstance() { return instance; }
 
 	private static final StationAccessor instance = new StationAccessor(); 
 	
-	private StationAccessor() {}
+	private GameType m_gameType;
+	
+	private boolean m_isEnabled;
+	
+	private StationAccessor() {
+		m_gameType = null;
+	}
 	
 	public boolean isDisabled() {
-		return false;
+		return !m_isEnabled;
 	}
 	
 	public boolean isEnabled() {
-		return !isDisabled();
+		return m_isEnabled;
 	}
 	
 	public long currentGameTime() {
@@ -21,13 +28,22 @@ public final class StationAccessor {
 	}
 	
 	public void waitForData() {
+		//TODO: actual implement
+		m_isEnabled = true;
+		m_gameType = GameType.AUTO;
 	}
 	
 	public boolean isAutonomous() {
-		return false;
+		return m_gameType == GameType.AUTO;
 	}
 	
 	public boolean isTeleop() {
-		return false;
+		return m_gameType == GameType.TELEOP;
 	}
+	
+	public GameType getGameType(){
+		return m_gameType;
+	}
+	
+	
 }
