@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.channels.IllegalBlockingModeException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -22,7 +23,7 @@ public final class StationAccessor extends Thread {
 	 * @author karlo
 	 */
 	public enum Alliance {
-		RED1(1), RED2(2), RED3(3), BLUE1(1), BLUE2(2), BLUE3(3), NONE(0);
+		RED1(1), RED2(2), BLUE1(1), BLUE2(2), NONE(0);
 
 		public final int position;
 
@@ -31,16 +32,17 @@ public final class StationAccessor extends Thread {
 		}
 
 		public static boolean isRedAlliance(Alliance a) {
-			return a == RED1 || a == RED2 || a == RED3;
+			return a == RED1 || a == RED2;
 		}
 
 		public static boolean isBlueAlliance(Alliance a) {
-			return a == BLUE1 || a == BLUE2 || a == BLUE3;
+			return a == BLUE1 || a == BLUE2;
 		}
 	}
 
 	/**
 	 * Type of the current played game; this may change during match
+	 * 
 	 * @author karlo
 	 */
 	public enum GameType {
@@ -49,6 +51,7 @@ public final class StationAccessor extends Thread {
 
 	/**
 	 * All data related to single joystick hid
+	 * 
 	 * @author karlo
 	 */
 	private static class NativeJoystickData {
@@ -78,16 +81,17 @@ public final class StationAccessor extends Thread {
 		public final String eventName;
 		public final String gameSpecificMessage;
 		public final int matchNumber;
-		
+
 		public MatchSpecificData(String eventName, String gameSpecificMessage, int matchNumber) {
 			this.eventName = eventName;
 			this.gameSpecificMessage = gameSpecificMessage;
 			this.matchNumber = matchNumber;
 		}
 	}
-	
-	/** 
+
+	/**
 	 * Every piece of data available from the station
+	 * 
 	 * @author karlo
 	 */
 	private static class StationDataCache {
@@ -110,11 +114,18 @@ public final class StationAccessor extends Thread {
 		}
 	}
 
+	/**
+	 * Maximum amount of joysticks to connect
+	 */
 	public static final int JOYSTICK_COUNT = 2;
 
+	/**
+	 * 
+	 */
 	private static final long NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL = 1000;
 
-	private static final int SOCKET_TIMEOUT = 500;
+	private static final int SERVER_TIMEOUT = 1000;
+	private static final int STATION_TIMEOUT = 10;
 
 	private static final Gson GSON_OBJECT = new Gson();
 	private static final TypeAdapter<StationDataCache> JSON_CACHE_PARSER = GSON_OBJECT
@@ -124,10 +135,10 @@ public final class StationAccessor extends Thread {
 
 	private static final StationAccessor instance = new StationAccessor();
 
-	private final ServerSocket SELF;
-	private final Socket STATION;
-	private final BufferedReader STATION_READER;
-	private final InputStreamReader STATION_INNER_READER;
+	private final ServerSocket m_self;
+	private final Socket m_station;
+	private final BufferedReader m_stationReader;
+	private final InputStreamReader m_stationInnerReader;
 
 	private long m_nextJoystickUnpluggedMessageTime = -1;
 
@@ -138,16 +149,17 @@ public final class StationAccessor extends Thread {
 	private final Lock m_waitForData = new ReentrantLock();
 	private final Condition m_hasDataArrived = m_waitForData.newCondition();
 	private int m_currentUpdateCount = 0;
-	
+
 	private volatile boolean m_keepThreadAlive = true;
 
 	private StationAccessor() {
 		try {
-			SELF = new ServerSocket(4590);
-			SELF.setSoTimeout(SOCKET_TIMEOUT);
-			STATION = SELF.accept();
-			STATION_INNER_READER = new InputStreamReader(STATION.getInputStream());
-			STATION_READER = new BufferedReader(STATION_INNER_READER);
+			m_self = new ServerSocket(4590);
+			m_self.setSoTimeout(SERVER_TIMEOUT);
+			m_station = m_self.accept();
+			m_station.setSoTimeout(STATION_TIMEOUT);
+			m_stationInnerReader = new InputStreamReader(m_station.getInputStream());
+			m_stationReader = new BufferedReader(m_stationInnerReader);
 		} catch (IOException | SecurityException | IllegalBlockingModeException e) {
 			System.exit(9970);
 			throw new RuntimeException();
@@ -159,7 +171,7 @@ public final class StationAccessor extends Thread {
 		return instance;
 	}
 
-	/** 
+	/**
 	 * @return Is the robot in disabled mode
 	 */
 	public boolean isDisabled() {
@@ -170,7 +182,6 @@ public final class StationAccessor extends Thread {
 
 	/**
 	 * @return Is the robot in disabled mode
-	 * @retur
 	 */
 	public boolean isEnabled() {
 		synchronized (m_cacheMutex) {
@@ -246,7 +257,19 @@ public final class StationAccessor extends Thread {
 		}
 	}
 
-	public float getJoystickAxis(int stick, int axis) {
+	/**
+	 * Returns the value of the requested axis at the requested joystick.
+	 * Normalized between 0-1 for triggers and between -1 to 1 otherwise.
+	 * 
+	 * @param stick
+	 *            Requested joystick index
+	 * @param axis
+	 *            Requested joystick button
+	 * @return The value of requested axis
+	 * @throws IllegalArgumentException
+	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
+	 */
+	public float getJoystickAxis(int stick, int axis) throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
 			throw new IllegalArgumentException(
 					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
@@ -261,8 +284,18 @@ public final class StationAccessor extends Thread {
 			}
 		}
 	}
-	
-	public boolean getJoystickPov(int stick, int pov) {
+
+	/**
+	 * 
+	 * @param stick
+	 *            Requested joystick index
+	 * @param pov
+	 *            Requested joystick pov button
+	 * @return The state of requested pov button (is it pressed)
+	 * @throws IllegalArgumentException
+	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
+	 */
+	public boolean getJoystickPov(int stick, int pov) throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
 			throw new IllegalArgumentException(
 					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
@@ -277,8 +310,18 @@ public final class StationAccessor extends Thread {
 			}
 		}
 	}
-	
-	public boolean getJoystickButton(int stick, int button) {
+
+	/**
+	 * 
+	 * @param stick
+	 *            Requested joystick index
+	 * @param button
+	 *            Requested joystick button
+	 * @return The state of requested button (is it pressed)
+	 * @throws IllegalArgumentException
+	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
+	 */
+	public boolean getJoystickButton(int stick, int button) throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
 			throw new IllegalArgumentException(
 					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
@@ -293,23 +336,34 @@ public final class StationAccessor extends Thread {
 			}
 		}
 	}
-	
+
 	public int getMatchNumber() {
 		return m_matchInfo.matchNumber;
 	}
-	
+
 	public String getGameSpecificMessage() {
 		return m_matchInfo.gameSpecificMessage;
 	}
-	
+
 	public String getEventName() {
 		return m_matchInfo.eventName;
 	}
 
+	/**
+	 * Stop the station from updating data
+	 */
 	public void release() {
 		m_keepThreadAlive = false;
+		try {
+			m_self.close();
+			m_station.close();
+			m_stationInnerReader.close();
+			m_stationReader.close();
+		} catch (IOException e) {
+			// TODO: handle this error
+		}
 	}
-	
+
 	@Override
 	public void run() {
 		while (m_keepThreadAlive)
@@ -356,12 +410,14 @@ public final class StationAccessor extends Thread {
 
 	private String safeGetString() {
 		try {
-			return STATION_READER.readLine();
+			return m_stationReader.readLine();
+		} catch (SocketTimeoutException e) {
+			// TODO: implement this message
 		} catch (IOException e) {
 			logSocketError(e);
 			System.exit(9970);
-			return "";
-		}
+		} 
+		return "";
 	}
 
 	private void logJsonParseError(String jsonObj) {
