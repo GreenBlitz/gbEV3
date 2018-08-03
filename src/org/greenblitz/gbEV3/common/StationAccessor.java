@@ -12,6 +12,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import lejos.hardware.Button;
 import lejos.hardware.Sound;
 
 import org.greenblitz.gbEV3.commandbased.Robot;
@@ -85,11 +86,10 @@ public final class StationAccessor extends Thread {
 	private static class MatchSpecificData {
 		public String eventName;
 		public String gameSpecificMessage;
-		public int matchNumber;
 		public Alliance alliance;
 	}
 
-	/**	
+	/**
 	 * Every piece of data available from the station
 	 * 
 	 * @author karlo
@@ -120,8 +120,8 @@ public final class StationAccessor extends Thread {
 
 	private static final Object instancelock = new Object();
 
-	private static final int SERVER_TIMEOUT = 5000;
-	private static final int STATION_TIMEOUT = 10;
+	private static final int SERVER_TIMEOUT = 2000;
+	private static final int STATION_TIMEOUT = 20;
 
 	private static final Gson GSON_OBJECT = new Gson();
 	private static final TypeAdapter<StationDataCache> JSON_CACHE_PARSER = GSON_OBJECT
@@ -132,9 +132,9 @@ public final class StationAccessor extends Thread {
 	private static StationAccessor instance;
 
 	private final ServerSocket m_self;
-	private final Socket m_station;
-	private final BufferedReader m_stationReader;
-	private final InputStreamReader m_stationInnerReader;
+	private Socket m_station;
+	private BufferedReader m_stationReader;
+	private InputStreamReader m_stationInnerReader;
 
 	private long m_nextJoystickUnpluggedMessageTime = -1;
 
@@ -150,11 +150,12 @@ public final class StationAccessor extends Thread {
 
 	private StationAccessor() {
 		m_self = getSelfSocket();
-		m_station = getStationSocket();
+		m_station = pollStationConnection();
 		m_stationInnerReader = getInnerReader();
 		m_stationReader = getReader();
-		m_matchInfo = null;//safeJsonAsMatchData();
-		Robot.getRobotLogger().info("connection between station and robot successfully set");
+		m_matchInfo = null;// safeJsonAsMatchData();
+		Robot.getRobotLogger().config(
+				"connection between station and robot successfully set");
 	}
 
 	public static StationAccessor getInstance() {
@@ -165,7 +166,7 @@ public final class StationAccessor extends Thread {
 			return instance;
 		}
 	}
-	
+
 	public static void init() {
 		synchronized (instancelock) {
 			if (instance == null)
@@ -193,7 +194,11 @@ public final class StationAccessor extends Thread {
 
 	private void aquireData() {
 		synchronized (m_cacheMutex) {
-			m_cache = safeJsonAsCache();
+			StationDataCache tmp = safeJsonAsCache();
+			if (tmp == null)
+				reAttainConnection();
+			else
+				m_cache = tmp;
 		}
 
 		m_hasDataArrived.signalAll();
@@ -343,10 +348,6 @@ public final class StationAccessor extends Thread {
 		}
 	}
 
-	public int getMatchNumber() {
-		return m_matchInfo.matchNumber;
-	}
-
 	public String getGameSpecificMessage() {
 		return m_matchInfo.gameSpecificMessage;
 	}
@@ -366,7 +367,6 @@ public final class StationAccessor extends Thread {
 			m_stationInnerReader.close();
 			m_stationReader.close();
 		} catch (IOException e) {
-			// TODO: handle this error
 		}
 	}
 
@@ -382,38 +382,37 @@ public final class StationAccessor extends Thread {
 
 	private StationDataCache safeJsonAsCache() {
 		String jsonObj = safeGetString();
-
+		if (jsonObj == null)
+			return null;
 		try {
 			StationDataCache ret;
 			if ((ret = JSON_CACHE_PARSER.fromJson(jsonObj)) == null) {
 				logJsonParseError(jsonObj);
-				System.exit(9971);
 				return null;
 			} else {
 				return ret;
 			}
 		} catch (IOException e) {
 			logJsonParseError(jsonObj);
-			System.exit(9971);
 			return null;
 		}
 	}
 
 	private MatchSpecificData safeJsonAsMatchData() {
 		String jsonObj = safeGetString();
+		if (jsonObj == null)
+			return null;
 
 		try {
 			MatchSpecificData ret;
 			if ((ret = JSON_MATCH_DATA_PARSER.fromJson(jsonObj)) == null) {
 				logJsonParseError(jsonObj);
-				System.exit(9971);
 				return null;
 			} else {
 				return ret;
 			}
 		} catch (IOException e) {
 			logJsonParseError(jsonObj);
-			System.exit(9971);
 			return null;
 		}
 	}
@@ -422,10 +421,8 @@ public final class StationAccessor extends Thread {
 		try {
 			return m_stationReader.readLine();
 		} catch (SocketTimeoutException e) {
-			// TODO: implement this message
 		} catch (IOException e) {
 			logSocketError(e);
-			System.exit(9970);
 		}
 		return "";
 	}
@@ -442,7 +439,7 @@ public final class StationAccessor extends Thread {
 	private void reportJoystickUnpluggedError(String message) {
 		long currentTime = RobotClock.currentTimeMicros();
 		if (currentTime > m_nextJoystickUnpluggedMessageTime) {
-			// TODO: implement this after merge
+			Robot.getRobotLogger().warning(message);
 			m_nextJoystickUnpluggedMessageTime = currentTime
 					+ NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
 		}
@@ -454,13 +451,9 @@ public final class StationAccessor extends Thread {
 			ret = new ServerSocket(4590);
 			ret.setSoTimeout(SERVER_TIMEOUT);
 		} catch (IOException e) {
-			try {
-				if (ret != null)
-					ret.close();
-			} catch (IOException e1) {}
-			Robot.getRobotLogger().severe("could not setup connection between station and robot");
+			Robot.getRobotLogger().severe(
+					"could not setup connection between station and robot");
 			Robot.exit(9970);
-			throw new RuntimeException();
 		}
 		return ret;
 	}
@@ -468,19 +461,22 @@ public final class StationAccessor extends Thread {
 	private Socket getStationSocket() {
 		Socket ret = null;
 		try {
-			Sound.beep();
+			Sound.twoBeeps();
 			ret = m_self.accept();
 			ret.setSoTimeout(STATION_TIMEOUT);
-			return ret;
+		} catch (SocketTimeoutException e) {
 		} catch (IOException e) {
 			try {
-				if (ret != null)
+				if (ret != null) {
 					ret.close();
-			} catch (IOException e1) {}
-			Robot.getRobotLogger().severe("could not setup connection between station and robot");
+				}
+			} catch (IOException e1) {
+			}
+			Robot.getRobotLogger().severe(
+					"could not setup connection between station and robot");
 			Robot.exit(9970);
-			return null;
 		}
+		return ret;
 	}
 
 	private InputStreamReader getInnerReader() {
@@ -488,12 +484,32 @@ public final class StationAccessor extends Thread {
 			return new InputStreamReader(m_station.getInputStream());
 		} catch (IOException e) {
 			Robot.getRobotLogger().severe(e.toString());
-			Robot.exit(9970);
 			return null;
 		}
 	}
 
 	private BufferedReader getReader() {
 		return new BufferedReader(m_stationInnerReader);
+	}
+
+	private void reAttainConnection() {
+		try {
+			m_station.close();
+			m_stationInnerReader.close();
+			m_stationReader.close();
+		} catch (IOException e) {
+		}
+		m_station = pollStationConnection();
+		m_stationInnerReader = getInnerReader();
+		m_stationReader = getReader();
+	}
+
+	private Socket pollStationConnection() {
+		Socket ret = getStationSocket();
+		while (ret == null && Button.ESCAPE.isUp())
+			ret = getStationSocket();
+		if (ret == null)
+			Robot.exit(-1);
+		return ret;
 	}
 }
