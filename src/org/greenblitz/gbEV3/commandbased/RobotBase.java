@@ -20,9 +20,11 @@ public class RobotBase {
 
 	protected final StationAccessor m_station = StationAccessor.getInstance();
 	
-	private static final RobotBase INSTANCE = new RobotBase(200);
+	private static final RobotBase INSTANCE = new RobotBase();
 	
 	protected static final Logger logger = Logger.getLogger("Robot");
+	
+	public static Logger getRobotLogger(){ return logger; }
 	
 	static {
 		try {
@@ -50,6 +52,10 @@ public class RobotBase {
 		m_miliPeriod = period;
 	}
 	
+	public RobotBase(){
+		this(50);
+	}
+	
 	public boolean isDisabled() {
 		return m_station.isDisabled();
 	}
@@ -67,25 +73,25 @@ public class RobotBase {
 	}
 
 	public void robotInit() {
-	    System.out.println("Default robotInit() method... Overload me!");
+		logger.warning("Default robotInit() method... Overload me!");
 	}
 	
 	public void disabledInit() {
-		System.out.println("Default disabledInit() method... Overload me!`");
+		logger.warning("Default disabledInit() method... Overload me!`");
 	}
 	
 	public void teleopInit() {
-	    System.out.println("Default teleopInit() method... Overload me!");
+		logger.warning("Default teleopInit() method... Overload me!");
 	}
 	
 	public void autonomousInit() {
-	    System.out.println("Default autonomousInit() method... Overload me!");
+		logger.warning("Default autonomousInit() method... Overload me!");
 	}
 	
 	private boolean m_isRpFirstRun = true;
 	public void robotPeriodic() {
 		if (m_isRpFirstRun) {
-		      System.out.println("Default robotPeriodic() method... Overload me!");
+			logger.warning("Default robotPeriodic() method... Overload me!");
 		      m_isRpFirstRun = false;
 		}
 	}
@@ -93,7 +99,7 @@ public class RobotBase {
 	private boolean m_isDpFirstRun = true;
 	public void disabledPeriodic() {
 		if (m_isDpFirstRun) {
-		      System.out.println("Default disabledPeriodic() method... Overload me!");
+		     logger.warning("Default disabledPeriodic() method... Overload me!");
 		      m_isDpFirstRun = false;
 		}
 	}
@@ -101,7 +107,7 @@ public class RobotBase {
 	private boolean m_isTpFirstRun = true;
 	public void teleopPeriodic() {
 		if (m_isTpFirstRun) {
-		      System.out.println("Default teleopPeriodic() method... Overload me!");
+			  logger.warning("Default teleopPeriodic() method... Overload me!");
 		      m_isTpFirstRun = false;
 		}
 	}
@@ -109,13 +115,13 @@ public class RobotBase {
 	private boolean m_isApFirstRun = true;
 	public void autonomousPeriodic() {
 		if (m_isApFirstRun) {
-		      System.out.println("Default autonomousPeriodic() method... Overload me!");
+			  logger.warning("Default autonomousPeriodic() method... Overload me!");
 		      m_isApFirstRun = false;
 		}
 	}
 	
 	public void startCompetition() {
-		logger.finest("Its alive! Im running" + m_station.getGameType());
+		logger.finest("Its alive! Im running " + m_station.getGameType());
 		
 		//auto
 		switch(m_station.getGameType()){
@@ -136,7 +142,7 @@ public class RobotBase {
 	public static void main(String[] args){
 		
 		//set new logger
-		System.setOut(new PrintStream(new OutputStream() {
+		/*System.setOut(new PrintStream(new OutputStream() {
 			StringBuilder mem = new StringBuilder();
 			@Override
 			public void write(int b) throws IOException {
@@ -153,16 +159,14 @@ public class RobotBase {
 		        logger.log (Level.INFO, mem.toString());
 		        mem.delete(0, mem.length() - 1);
 		    }
-		}));
-		
+		}));*/
+		Sound.beep();
 		try{
 			logger.info("Robot running!");
 			logger.info("Hello John, Im ev3");
 			Sound.beep();
 			
 			INSTANCE.robotInit();
-			
-			StationAccessor.getInstance().waitForData();
 			
 			while(Button.ESCAPE.isUp()) {
 				INSTANCE.robotPeriodic();

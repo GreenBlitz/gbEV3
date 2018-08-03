@@ -11,6 +11,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.FileHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.logging.XMLFormatter;
+
+import lejos.hardware.Sound;
+
+import org.greenblitz.gbEV3.commandbased.RobotBase;
 
 import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
@@ -78,15 +86,10 @@ public final class StationAccessor extends Thread {
 	 * @author karlo
 	 */
 	private static class MatchSpecificData {
-		public final String eventName;
-		public final String gameSpecificMessage;
-		public final int matchNumber;
-
-		public MatchSpecificData(String eventName, String gameSpecificMessage, int matchNumber) {
-			this.eventName = eventName;
-			this.gameSpecificMessage = gameSpecificMessage;
-			this.matchNumber = matchNumber;
-		}
+		public String eventName;
+		public String gameSpecificMessage;
+		public int matchNumber;
+		public Alliance alliance;
 	}
 
 	/**
@@ -96,7 +99,6 @@ public final class StationAccessor extends Thread {
 	 */
 	private static class StationDataCache {
 		public NativeJoystickData[] joystickData;
-		public Alliance alliance;
 		public GameType gameType;
 		public boolean isEnabled;
 
@@ -105,8 +107,6 @@ public final class StationAccessor extends Thread {
 			for (int i = 0; i < joystickData.length; i++) {
 				joystickData[i] = new NativeJoystickData();
 			}
-			alliance = Alliance.NONE;
-			gameType = GameType.INVALID;
 		}
 
 		public StationDataCache() {
@@ -124,6 +124,23 @@ public final class StationAccessor extends Thread {
 	 */
 	private static final long NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL = 1000;
 
+	private static final Logger logger = Logger.getLogger(StationAccessor.getInstance().getClass().getSimpleName());
+	
+	static {
+		logger.setParent(RobotBase.getRobotLogger());
+		FileHandler fHndl;
+		try {
+			fHndl = new FileHandler("StationAccesor.log", false);
+			fHndl.setFormatter(new XMLFormatter());
+			fHndl.setLevel(Level.ALL);
+			logger.addHandler(fHndl);
+		} catch (SecurityException | IOException e) {
+			Sound.buzz();
+			e.printStackTrace();
+		}
+		
+	}
+	
 	private static final int SERVER_TIMEOUT = 1000;
 	private static final int STATION_TIMEOUT = 10;
 
@@ -161,6 +178,9 @@ public final class StationAccessor extends Thread {
 			m_stationInnerReader = new InputStreamReader(m_station.getInputStream());
 			m_stationReader = new BufferedReader(m_stationInnerReader);
 		} catch (IOException | SecurityException | IllegalBlockingModeException e) {
+			
+			logger.severe(e.getMessage());
+			
 			System.exit(9970);
 			throw new RuntimeException();
 		}
@@ -253,7 +273,7 @@ public final class StationAccessor extends Thread {
 
 	public Alliance getAlliance() {
 		synchronized (m_cacheMutex) {
-			return m_cache.alliance;
+			return m_matchInfo.alliance;
 		}
 	}
 
@@ -421,11 +441,12 @@ public final class StationAccessor extends Thread {
 	}
 
 	private void logJsonParseError(String jsonObj) {
-		// TODO: implement this after merge
+		logger.severe("Error parsing " + jsonObj);
 	}
 
 	private void logSocketError(IOException e) {
-		// TODO: implement this after merge
+		logger.severe("IOException: " + e.getMessage());
+		Sound.buzz();
 	}
 
 	private void reportJoystickUnpluggedError(String message) {
