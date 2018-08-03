@@ -3,22 +3,18 @@ package org.greenblitz.gbEV3.common;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.nio.channels.IllegalBlockingModeException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.FileHandler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.logging.XMLFormatter;
 
 import lejos.hardware.Sound;
 
-import org.greenblitz.gbEV3.commandbased.RobotBase;
+import org.greenblitz.gbEV3.commandbased.Robot;
 
 import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
@@ -54,7 +50,7 @@ public final class StationAccessor extends Thread {
 	 * @author karlo
 	 */
 	public enum GameType {
-		TELEOP, AUTO, INVALID
+		TELEOP, AUTO
 	}
 
 	/**
@@ -68,7 +64,8 @@ public final class StationAccessor extends Thread {
 		public boolean[] buttons;
 		public boolean isValid;
 
-		public NativeJoystickData(int axesCount, int buttonCount, int povsCount, boolean isValid) {
+		public NativeJoystickData(int axesCount, int buttonCount,
+				int povsCount, boolean isValid) {
 			axes = new float[axesCount];
 			povs = new boolean[buttonCount];
 			buttons = new boolean[povsCount];
@@ -92,7 +89,7 @@ public final class StationAccessor extends Thread {
 		public Alliance alliance;
 	}
 
-	/**
+	/**	
 	 * Every piece of data available from the station
 	 * 
 	 * @author karlo
@@ -119,29 +116,11 @@ public final class StationAccessor extends Thread {
 	 */
 	public static final int JOYSTICK_COUNT = 2;
 
-	/**
-	 * 
-	 */
 	private static final long NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL = 1000;
 
-	private static final Logger logger = Logger.getLogger(StationAccessor.getInstance().getClass().getSimpleName());
-	
-	static {
-		logger.setParent(RobotBase.getRobotLogger());
-		FileHandler fHndl;
-		try {
-			fHndl = new FileHandler("StationAccesor.log", false);
-			fHndl.setFormatter(new XMLFormatter());
-			fHndl.setLevel(Level.ALL);
-			logger.addHandler(fHndl);
-		} catch (SecurityException | IOException e) {
-			Sound.buzz();
-			e.printStackTrace();
-		}
-		
-	}
-	
-	private static final int SERVER_TIMEOUT = 1000;
+	private static final Object instancelock = new Object();
+
+	private static final int SERVER_TIMEOUT = 5000;
 	private static final int STATION_TIMEOUT = 10;
 
 	private static final Gson GSON_OBJECT = new Gson();
@@ -150,7 +129,7 @@ public final class StationAccessor extends Thread {
 	private static final TypeAdapter<MatchSpecificData> JSON_MATCH_DATA_PARSER = GSON_OBJECT
 			.getAdapter(MatchSpecificData.class);
 
-	private static final StationAccessor instance = new StationAccessor();
+	private static StationAccessor instance;
 
 	private final ServerSocket m_self;
 	private final Socket m_station;
@@ -170,25 +149,28 @@ public final class StationAccessor extends Thread {
 	private volatile boolean m_keepThreadAlive = true;
 
 	private StationAccessor() {
-		try {
-			m_self = new ServerSocket(4590);
-			m_self.setSoTimeout(SERVER_TIMEOUT);
-			m_station = m_self.accept();
-			m_station.setSoTimeout(STATION_TIMEOUT);
-			m_stationInnerReader = new InputStreamReader(m_station.getInputStream());
-			m_stationReader = new BufferedReader(m_stationInnerReader);
-		} catch (IOException | SecurityException | IllegalBlockingModeException e) {
-			
-			logger.severe(e.getMessage());
-			
-			System.exit(9970);
-			throw new RuntimeException();
-		}
-		m_matchInfo = safeJsonAsMatchData();
+		m_self = getSelfSocket();
+		m_station = getStationSocket();
+		m_stationInnerReader = getInnerReader();
+		m_stationReader = getReader();
+		m_matchInfo = null;//safeJsonAsMatchData();
+		Robot.getRobotLogger().info("connection between station and robot successfully set");
 	}
 
 	public static StationAccessor getInstance() {
-		return instance;
+		synchronized (instancelock) {
+			if (instance == null)
+				instance = new StationAccessor();
+
+			return instance;
+		}
+	}
+	
+	public static void init() {
+		synchronized (instancelock) {
+			if (instance == null)
+				instance = new StationAccessor();
+		}
 	}
 
 	/**
@@ -233,7 +215,8 @@ public final class StationAccessor extends Thread {
 
 					long now = RobotClock.currentTimeMicros();
 					if (now < startTime + timeout) {
-						boolean signaled = m_hasDataArrived.await(startTime + timeout - now, TimeUnit.MICROSECONDS);
+						boolean signaled = m_hasDataArrived.await(startTime
+								+ timeout - now, TimeUnit.MICROSECONDS);
 
 						if (!signaled)
 							return false;
@@ -289,15 +272,16 @@ public final class StationAccessor extends Thread {
 	 * @throws IllegalArgumentException
 	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
 	 */
-	public float getJoystickAxis(int stick, int axis) throws IllegalArgumentException {
+	public float getJoystickAxis(int stick, int axis)
+			throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
-			throw new IllegalArgumentException(
-					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
+			throw new IllegalArgumentException("Joystick index out of range: '"
+					+ stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
 
 		synchronized (m_cacheMutex) {
 			if (!m_cache.joystickData[stick].isValid) {
-				reportJoystickUnpluggedError(
-						"Invalid joystick input on port '" + stick + "', check if it is connected");
+				reportJoystickUnpluggedError("Invalid joystick input on port '"
+						+ stick + "', check if it is connected");
 				return 0;
 			} else {
 				return m_cache.joystickData[stick].axes[axis];
@@ -315,15 +299,16 @@ public final class StationAccessor extends Thread {
 	 * @throws IllegalArgumentException
 	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
 	 */
-	public boolean getJoystickPov(int stick, int pov) throws IllegalArgumentException {
+	public boolean getJoystickPov(int stick, int pov)
+			throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
-			throw new IllegalArgumentException(
-					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
+			throw new IllegalArgumentException("Joystick index out of range: '"
+					+ stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
 
 		synchronized (m_cacheMutex) {
 			if (!m_cache.joystickData[stick].isValid) {
-				reportJoystickUnpluggedError(
-						"Invalid joystick input on port '" + stick + "', check if it is connected");
+				reportJoystickUnpluggedError("Invalid joystick input on port '"
+						+ stick + "', check if it is connected");
 				return false;
 			} else {
 				return m_cache.joystickData[stick].povs[pov];
@@ -341,15 +326,16 @@ public final class StationAccessor extends Thread {
 	 * @throws IllegalArgumentException
 	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
 	 */
-	public boolean getJoystickButton(int stick, int button) throws IllegalArgumentException {
+	public boolean getJoystickButton(int stick, int button)
+			throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
-			throw new IllegalArgumentException(
-					"Joystick index out of range: '" + stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
+			throw new IllegalArgumentException("Joystick index out of range: '"
+					+ stick + "', expected 0 - " + (JOYSTICK_COUNT - 1));
 
 		synchronized (m_cacheMutex) {
 			if (!m_cache.joystickData[stick].isValid) {
-				reportJoystickUnpluggedError(
-						"Invalid joystick input on port '" + stick + "', check if it is connected");
+				reportJoystickUnpluggedError("Invalid joystick input on port '"
+						+ stick + "', check if it is connected");
 				return false;
 			} else {
 				return m_cache.joystickData[stick].buttons[button];
@@ -388,6 +374,10 @@ public final class StationAccessor extends Thread {
 	public void run() {
 		while (m_keepThreadAlive)
 			aquireData();
+	}
+
+	public InetSocketAddress getStationConnectionAddress() {
+		return (InetSocketAddress) m_station.getRemoteSocketAddress();
 	}
 
 	private StationDataCache safeJsonAsCache() {
@@ -436,16 +426,16 @@ public final class StationAccessor extends Thread {
 		} catch (IOException e) {
 			logSocketError(e);
 			System.exit(9970);
-		} 
+		}
 		return "";
 	}
 
 	private void logJsonParseError(String jsonObj) {
-		logger.severe("Error parsing " + jsonObj);
+		Robot.getRobotLogger().severe("Error parsing " + jsonObj);
 	}
 
 	private void logSocketError(IOException e) {
-		logger.severe("IOException: " + e.getMessage());
+		Robot.getRobotLogger().severe("IOException: " + e.getMessage());
 		Sound.buzz();
 	}
 
@@ -453,7 +443,57 @@ public final class StationAccessor extends Thread {
 		long currentTime = RobotClock.currentTimeMicros();
 		if (currentTime > m_nextJoystickUnpluggedMessageTime) {
 			// TODO: implement this after merge
-			m_nextJoystickUnpluggedMessageTime = currentTime + NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
+			m_nextJoystickUnpluggedMessageTime = currentTime
+					+ NEXT_JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
 		}
+	}
+
+	private ServerSocket getSelfSocket() {
+		ServerSocket ret = null;
+		try {
+			ret = new ServerSocket(4590);
+			ret.setSoTimeout(SERVER_TIMEOUT);
+		} catch (IOException e) {
+			try {
+				if (ret != null)
+					ret.close();
+			} catch (IOException e1) {}
+			Robot.getRobotLogger().severe("could not setup connection between station and robot");
+			Robot.exit(9970);
+			throw new RuntimeException();
+		}
+		return ret;
+	}
+
+	private Socket getStationSocket() {
+		Socket ret = null;
+		try {
+			Sound.beep();
+			ret = m_self.accept();
+			ret.setSoTimeout(STATION_TIMEOUT);
+			return ret;
+		} catch (IOException e) {
+			try {
+				if (ret != null)
+					ret.close();
+			} catch (IOException e1) {}
+			Robot.getRobotLogger().severe("could not setup connection between station and robot");
+			Robot.exit(9970);
+			return null;
+		}
+	}
+
+	private InputStreamReader getInnerReader() {
+		try {
+			return new InputStreamReader(m_station.getInputStream());
+		} catch (IOException e) {
+			Robot.getRobotLogger().severe(e.toString());
+			Robot.exit(9970);
+			return null;
+		}
+	}
+
+	private BufferedReader getReader() {
+		return new BufferedReader(m_stationInnerReader);
 	}
 }

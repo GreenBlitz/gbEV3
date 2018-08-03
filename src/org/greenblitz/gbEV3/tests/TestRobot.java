@@ -2,9 +2,9 @@ package org.greenblitz.gbEV3.tests;
 
 import lejos.hardware.lcd.LCD;
 
-import org.greenblitz.gbEV3.commandbased.RobotBase;
+import org.greenblitz.gbEV3.commandbased.Robot;
 
-public class TestRobot extends RobotBase {
+public class TestRobot extends Robot {
 
 	public TestRobot(int period) {
 		super(period);
