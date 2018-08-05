@@ -1,18 +1,14 @@
 package org.greenblitz.gbEV3.commandbased;
 
 import java.io.IOException;
-import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
-import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
 import lejos.hardware.Button;
 import lejos.hardware.Sound;
-import lejos.utility.Delay;
 
-import org.greenblitz.gbEV3.common.RobotClock;
 import org.greenblitz.gbEV3.common.StationAccessor;
 
 public class Robot {
@@ -29,7 +25,7 @@ public class Robot {
 		Sound.buzz();
 		System.exit(code);
 	}
-	
+
 	public boolean isDisabled() {
 		return m_station.isDisabled();
 	}
@@ -137,12 +133,12 @@ public class Robot {
 		}
 	}
 
-	public static void run(Robot robot) {
+	public static void gbEV3_MAIN(Robot robot) {
 		try {
 			logger.setUseParentHandlers(false);
 			FileHandler fHndl = new FileHandler("robot.log", false);
 			fHndl.setFormatter(new SimpleFormatter());
-			fHndl.setLevel(Level.ALL);
+			fHndl.setLevel(Level.FINE);
 			logger.addHandler(fHndl);
 			logger.setLevel(Level.ALL);
 			StationAccessor.init();
@@ -163,7 +159,7 @@ public class Robot {
 				robot.loopFunc();
 			}
 		} catch (Throwable t) {
-			logger.severe(t.toString());
+			logger.log(Level.SEVERE, "Error: ", t);
 			Sound.buzz();
 		}
 	}

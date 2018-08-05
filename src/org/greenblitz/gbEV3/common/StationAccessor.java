@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
 
 import lejos.hardware.Button;
 import lejos.hardware.Sound;
@@ -51,7 +52,7 @@ public final class StationAccessor extends Thread {
 	 * @author karlo
 	 */
 	public enum GameType {
-		TELEOP, AUTO
+		TELEOP, AUTO, INVALID
 	}
 
 	/**
@@ -61,14 +62,12 @@ public final class StationAccessor extends Thread {
 	 */
 	private static class NativeJoystickData {
 		public float[] axes;
-		public boolean[] povs;
 		public boolean[] buttons;
 		public boolean isValid;
 
 		public NativeJoystickData(int axesCount, int buttonCount,
 				int povsCount, boolean isValid) {
 			axes = new float[axesCount];
-			povs = new boolean[buttonCount];
 			buttons = new boolean[povsCount];
 			this.isValid = isValid;
 		}
@@ -153,7 +152,7 @@ public final class StationAccessor extends Thread {
 		m_station = pollStationConnection();
 		m_stationInnerReader = getInnerReader();
 		m_stationReader = getReader();
-		m_matchInfo = null;// safeJsonAsMatchData();
+		m_matchInfo = safeJsonAsMatchData();
 		Robot.getRobotLogger().config(
 				"connection between station and robot successfully set");
 	}
@@ -304,7 +303,7 @@ public final class StationAccessor extends Thread {
 	 * @throws IllegalArgumentException
 	 *             if {@code stick < 0} or {@code stick >= JOYSTICK_COUNT}
 	 */
-	public boolean getJoystickPov(int stick, int pov)
+	/*public boolean getJoystickPov(int stick, int pov)
 			throws IllegalArgumentException {
 		if (stick < 0 || stick >= JOYSTICK_COUNT)
 			throw new IllegalArgumentException("Joystick index out of range: '"
@@ -319,7 +318,7 @@ public final class StationAccessor extends Thread {
 				return m_cache.joystickData[stick].povs[pov];
 			}
 		}
-	}
+	}*/
 
 	/**
 	 * 
@@ -387,13 +386,13 @@ public final class StationAccessor extends Thread {
 		try {
 			StationDataCache ret;
 			if ((ret = JSON_CACHE_PARSER.fromJson(jsonObj)) == null) {
-				logJsonParseError(jsonObj);
+				Robot.getRobotLogger().log(Level.SEVERE, "GSON Error: line 391");
 				return null;
 			} else {
 				return ret;
 			}
 		} catch (IOException e) {
-			logJsonParseError(jsonObj);
+			Robot.getRobotLogger().log(Level.SEVERE, "GSON Error: ", e);
 			return null;
 		}
 	}
@@ -406,34 +405,27 @@ public final class StationAccessor extends Thread {
 		try {
 			MatchSpecificData ret;
 			if ((ret = JSON_MATCH_DATA_PARSER.fromJson(jsonObj)) == null) {
-				logJsonParseError(jsonObj);
+				Robot.getRobotLogger().log(Level.SEVERE, "GSON Error: ");
 				return null;
 			} else {
 				return ret;
 			}
 		} catch (IOException e) {
-			logJsonParseError(jsonObj);
+			Robot.getRobotLogger().log(Level.SEVERE, "GSON 	Error: ", e);;
 			return null;
 		}
 	}
 
 	private String safeGetString() {
 		try {
-			return m_stationReader.readLine();
+			String line = m_stationReader.readLine();
+			Robot.getRobotLogger().info("read from gson: " + line);
+			return line;
 		} catch (SocketTimeoutException e) {
 		} catch (IOException e) {
-			logSocketError(e);
+			Robot.getRobotLogger().log(Level.SEVERE, "IO Socket Error: ", e);
 		}
 		return "";
-	}
-
-	private void logJsonParseError(String jsonObj) {
-		Robot.getRobotLogger().severe("Error parsing " + jsonObj);
-	}
-
-	private void logSocketError(IOException e) {
-		Robot.getRobotLogger().severe("IOException: " + e.getMessage());
-		Sound.buzz();
 	}
 
 	private void reportJoystickUnpluggedError(String message) {
@@ -448,7 +440,7 @@ public final class StationAccessor extends Thread {
 	private ServerSocket getSelfSocket() {
 		ServerSocket ret = null;
 		try {
-			ret = new ServerSocket(4590);
+			ret = new ServerSocket(4444);
 			ret.setSoTimeout(SERVER_TIMEOUT);
 		} catch (IOException e) {
 			Robot.getRobotLogger().severe(
