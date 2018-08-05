@@ -8,8 +8,8 @@ import java.util.Set;
  * Part of the essential parts of the Command Base design pattern.
  */
 public abstract class Command {
-	
-	private class Requirements implements Iterable<Subsystem> {
+
+	class Requirements implements Iterable<Subsystem> {
 		@Override
 		public Iterator<Subsystem> iterator() {
 			return m_requirements.iterator();
@@ -24,26 +24,30 @@ public abstract class Command {
 	private final boolean m_interruptible;
 	private volatile boolean m_ended = false;
 
-	public Command(boolean interruptible) {
-		m_interruptible = interruptible;
-	}
-
 	public Command(boolean interruptible, Subsystem... requirements) {
 		this(interruptible);
-		for (Subsystem required : requirements) 
+		for (Subsystem required : requirements)
 			if (!requires(required))
 				throw new IllegalArgumentException("cannot require null subsystem");
 	}
+
+	public Command(boolean interruptible) {
+		m_interruptible = interruptible;
+	}
 	
+	public Command(Subsystem... subsystems) {
+		this(true, subsystems);
+	}
+
 	public void start() {
 		Scheduler.getInstance().add(this);
 	}
-	
 
 	public final void run() {
-		if (m_initialized)
+		if (!m_initialized){
 			_initialize();
-
+			Robot.getRobotLogger().finest("initializing command" + this);
+		}
 		if (shouldRun()) {
 			m_running = true;
 
@@ -92,7 +96,7 @@ public abstract class Command {
 		return m_ended;
 	}
 
-	public final boolean shouldRun() {
+	public boolean shouldRun() {
 		return !isCompleted() && !(isEnded() && isInterruptible());
 	}
 
@@ -136,5 +140,9 @@ public abstract class Command {
 
 	protected void interrupted() {
 		ended();
+	}
+
+	public int getRequirementCount() {
+		return m_requirements.size();
 	}
 }

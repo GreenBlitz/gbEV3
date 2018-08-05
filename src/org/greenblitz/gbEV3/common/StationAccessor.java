@@ -1,25 +1,25 @@
 package org.greenblitz.gbEV3.common;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 
-import lejos.hardware.Button;
-import lejos.hardware.Sound;
-
 import org.greenblitz.gbEV3.commandbased.Robot;
 
 import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
+
+import lejos.hardware.Button;
+import lejos.hardware.Sound;
 
 public final class StationAccessor extends Thread {
 
@@ -132,8 +132,8 @@ public final class StationAccessor extends Thread {
 
 	private final ServerSocket m_self;
 	private Socket m_station;
-	private BufferedReader m_stationReader;
-	private InputStreamReader m_stationInnerReader;
+	private Scanner m_stationReader;
+	private PrintStream m_stationWriter;
 
 	private long m_nextJoystickUnpluggedMessageTime = -1;
 
@@ -150,8 +150,8 @@ public final class StationAccessor extends Thread {
 	private StationAccessor() {
 		m_self = getSelfSocket();
 		m_station = pollStationConnection();
-		m_stationInnerReader = getInnerReader();
 		m_stationReader = getReader();
+		m_stationWriter = getStationWriter();
 		m_matchInfo = safeJsonAsMatchData();
 		Robot.getRobotLogger().config(
 				"connection between station and robot successfully set");
@@ -363,7 +363,6 @@ public final class StationAccessor extends Thread {
 		try {
 			m_self.close();
 			m_station.close();
-			m_stationInnerReader.close();
 			m_stationReader.close();
 		} catch (IOException e) {
 		}
@@ -377,6 +376,18 @@ public final class StationAccessor extends Thread {
 
 	public InetSocketAddress getStationConnectionAddress() {
 		return (InetSocketAddress) m_station.getRemoteSocketAddress();
+	}
+	
+	public void send(String msg) {
+		m_stationWriter.println(msg);
+	}
+	
+	public void flush() {
+		m_stationWriter.flush();
+	}
+	
+	public PrintStream getStationStream() {
+		return m_stationWriter;
 	}
 
 	private StationDataCache safeJsonAsCache() {
@@ -417,15 +428,17 @@ public final class StationAccessor extends Thread {
 	}
 
 	private String safeGetString() {
-		try {
-			String line = m_stationReader.readLine();
-			Robot.getRobotLogger().info("read from gson: " + line);
-			return line;
-		} catch (SocketTimeoutException e) {
-		} catch (IOException e) {
-			Robot.getRobotLogger().log(Level.SEVERE, "IO Socket Error: ", e);
+		String ret = m_stationReader.next();
+		if (ret.indexOf((char)-1) == -1) {
+			logSocketError("connection to remote station lost");
+			reAttainConnection();
 		}
 		return "";
+	}
+	
+	private void logSocketError(String message) {
+		Robot.getRobotLogger().severe(message);
+		Sound.buzz();
 	}
 
 	private void reportJoystickUnpluggedError(String message) {
@@ -470,29 +483,32 @@ public final class StationAccessor extends Thread {
 		}
 		return ret;
 	}
-
-	private InputStreamReader getInnerReader() {
+	
+	private Scanner getReader() {
 		try {
-			return new InputStreamReader(m_station.getInputStream());
+			return new Scanner(m_station.getInputStream());
 		} catch (IOException e) {
-			Robot.getRobotLogger().severe(e.toString());
+			logSocketError(e.toString());
 			return null;
 		}
 	}
-
-	private BufferedReader getReader() {
-		return new BufferedReader(m_stationInnerReader);
+	
+	private PrintStream getStationWriter() {
+		try {
+			return new PrintStream(m_station.getOutputStream());
+		} catch (IOException e) {
+			logSocketError(e.toString());
+			return null;
+		}
 	}
 
 	private void reAttainConnection() {
 		try {
 			m_station.close();
-			m_stationInnerReader.close();
 			m_stationReader.close();
 		} catch (IOException e) {
 		}
 		m_station = pollStationConnection();
-		m_stationInnerReader = getInnerReader();
 		m_stationReader = getReader();
 	}
 

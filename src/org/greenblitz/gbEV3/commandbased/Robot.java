@@ -2,14 +2,16 @@ package org.greenblitz.gbEV3.commandbased;
 
 import java.io.IOException;
 import java.util.logging.FileHandler;
+import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
+import org.greenblitz.gbEV3.common.StationAccessor;
+
 import lejos.hardware.Button;
 import lejos.hardware.Sound;
-
-import org.greenblitz.gbEV3.common.StationAccessor;
 
 public class Robot {
 	protected static final Logger logger = Logger.getLogger("robot");
@@ -135,7 +137,7 @@ public class Robot {
 
 	public static void gbEV3_MAIN(Robot robot) {
 		try {
-			logger.setUseParentHandlers(false);
+			Logger.getGlobal().setLevel(Level.SEVERE);
 			FileHandler fHndl = new FileHandler("robot.log", false);
 			fHndl.setFormatter(new SimpleFormatter());
 			fHndl.setLevel(Level.FINE);
@@ -146,20 +148,43 @@ public class Robot {
 			logger.severe(e.toString());
 			Robot.exit(-1);
 		}
+		Logger.getGlobal().addHandler(new Handler() {
+			@Override
+			public void publish(LogRecord record) {
+				StationAccessor.getInstance().send(getFormatter().format(record));					
+			}
+			
+			@Override
+			public void flush() {
+				StationAccessor.getInstance().flush();
+			}
+			
+			@Override
+			public void close() throws SecurityException {
+				StationAccessor.getInstance().release();
+			}
+		});
+		
 
 		Sound.beep();
 		try {
 			robot.robotInit();
-
-			logger.info("Robot running!");
-			Sound.beep();
+		} catch (Throwable t) {
+			logger.severe("Robots don't quit, but yours did!");
+			logger.severe(t.toString());
+			t.printStackTrace(StationAccessor.getInstance().getStationStream());
+		}
+		try {
+			logger.config("Robot running!");
 
 			while (Button.ESCAPE.isUp()) {
 				robot.m_station.waitForData(255);
 				robot.loopFunc();
 			}
 		} catch (Throwable t) {
-			logger.log(Level.SEVERE, "Error: ", t);
+			logger.severe("Robots don't quit, but yours did!");
+			logger.severe(t.toString());
+			t.printStackTrace(StationAccessor.getInstance().getStationStream());
 			Sound.buzz();
 		}
 	}
