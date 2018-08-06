@@ -6,6 +6,7 @@ import org.greenblitz.gbEV3.tests.full.commands.DriveMotors;
 
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 import lejos.hardware.port.MotorPort;
+import lejos.robotics.RegulatedMotor;
 
 public class Chassis extends Subsystem {
 
@@ -26,7 +27,20 @@ public class Chassis extends Subsystem {
 	public void tankDrive(int speedLeft, int speedRight) {
 		left.setSpeed(speedLeft);
 		right.setSpeed(speedRight);
-		Robot.getRobotLogger().fine("Right chassis: " + speedRight + " Left chassis: " + speedLeft);
+		if (!left.isMoving() && speedLeft != 0) {
+			startEngine(left, speedLeft > 0);
+		}
+		if (!right.isMoving() && speedRight != 0) {
+			startEngine(right, speedRight > 0);
+		}
+	}
+	
+	private void startEngine(RegulatedMotor m, boolean direction) {
+		if (direction)
+			m.forward();
+		else
+			m.backward();
+			
 	}
 
 	@Override

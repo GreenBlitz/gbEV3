@@ -217,12 +217,20 @@ public final class StationAccessor extends Thread {
 	private void aquireData() {
 		m_waitForData.lock();
 		try {
-			Robot.getRobotLogger().finest("Aquiring data");
-
 			synchronized (m_cacheMutex) {
 				StationDataCache tmp = safeJsonAsCache();
-				if (tmp != null) 
+				if (tmp != null) {
+					StringBuilder sb = new StringBuilder();
+					if (tmp.gameType != m_cache.gameType)
+						sb.append("game type changed: '" + m_cache.gameType + "' to '" + tmp.gameType + "'");
+					if (tmp.isEnabled != m_cache.isEnabled) {
+						if (sb.length() != 0) sb.append(", ");
+						sb.append("robot is now ").append(tmp.isEnabled ? "enabled" : "disabled");
+					}
+					if (sb.length() != 0)
+						Robot.getRobotLogger().finer(sb.toString());	
 					m_cache = tmp;
+				}
 			}
 
 			m_hasDataArrived.signalAll();
@@ -448,12 +456,12 @@ public final class StationAccessor extends Thread {
 			return "";
 
 		String ret = m_stationReader.next();
-		Robot.getRobotLogger().finer("string received from station: " + ret);
 		if (ret.indexOf((char) -1) != -1) {
 			Robot.getRobotLogger().severe("connection to remote station lost");
 			Robot.exit(9971);
 			return "";
 		}
+		Robot.getRobotLogger().finest(ret);
 		return ret;
 	}
 
@@ -522,16 +530,6 @@ public final class StationAccessor extends Thread {
 			Sound.buzz();
 			return null;
 		}
-	}
-
-	private void reAttainConnection() {
-		try {
-			m_station.close();
-			m_stationReader.close();
-		} catch (IOException e) {
-		}
-		m_station = pollStationConnection();
-		m_stationReader = getReader();
 	}
 
 	private Socket pollStationConnection() {

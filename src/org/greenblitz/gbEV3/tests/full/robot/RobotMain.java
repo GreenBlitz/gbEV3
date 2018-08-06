@@ -18,6 +18,7 @@ public class RobotMain extends Robot {
 	@Override
 	public void teleopInit() {
 		System.out.println("teleop");
+		Robot.getRobotLogger().fine("teleop init called");
 	}
 
 	@Override

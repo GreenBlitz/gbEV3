@@ -3,6 +3,7 @@ package org.greenblitz.gbEV3.commandbased;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.logging.FileHandler;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
@@ -15,6 +16,11 @@ import lejos.hardware.Sound;
 public class Robot {
 	protected static Logger ROBOT_LOGGER;
 
+	static {
+	      System.setProperty("java.util.logging.SimpleFormatter.format",
+	              "%2$s%n[%4$s] %5$s%n%6$s");
+	  }
+	
 	public static final Logger getRobotLogger() {
 		return ROBOT_LOGGER;
 	}
@@ -140,7 +146,7 @@ public class Robot {
 			Robot.ROBOT_LOGGER.setUseParentHandlers(false);
 			FileHandler fHndl = new FileHandler("robot.log", false);
 			fHndl.setFormatter(new SimpleFormatter());
-			fHndl.setLevel(Level.FINE);
+			fHndl.setLevel(Level.FINEST);
 			ROBOT_LOGGER.addHandler(fHndl);
 			ROBOT_LOGGER.setLevel(Level.ALL);
 		} catch (SecurityException | IOException e) {
@@ -173,6 +179,10 @@ public class Robot {
 			ROBOT_LOGGER.severe(t.toString());
 			ROBOT_LOGGER.severe(Arrays.toString(t.getStackTrace()));
 			Robot.exit(-1);
+		}
+		for (Handler hnd : ROBOT_LOGGER.getHandlers()) {
+			hnd.flush();
+			hnd.close();
 		}
 	}
 }
