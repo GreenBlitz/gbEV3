@@ -1,10 +1,10 @@
 package org.greenblitz.gbEV3.commandbased;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.logging.FileHandler;
 import java.util.logging.Handler;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
@@ -14,13 +14,18 @@ import lejos.hardware.Button;
 import lejos.hardware.Sound;
 
 public class Robot {
-	protected static final Logger logger = Logger.getLogger("robot");
+	protected static Logger ROBOT_LOGGER;
 
-	public static Logger getRobotLogger() {
-		return logger;
+	static {
+	      System.setProperty("java.util.logging.SimpleFormatter.format",
+	              "%2$s%n[%4$s] %5$s%n%6$s");
+	  }
+	
+	public static final Logger getRobotLogger() {
+		return ROBOT_LOGGER;
 	}
-
-	protected final StationAccessor m_station = StationAccessor.getInstance();
+	
+	private StationAccessor m_station;
 	private boolean m_calledDisabledInit = false;
 
 	public static void exit(int code) {
@@ -45,26 +50,26 @@ public class Robot {
 	}
 
 	public void robotInit() {
-		logger.warning("Default robotInit() method... Overload me!");
+		ROBOT_LOGGER.warning("Default robotInit() method... Overload me!");
 	}
 
 	public void disabledInit() {
-		logger.warning("Default disabledInit() method... Overload me!`");
+		ROBOT_LOGGER.warning("Default disabledInit() method... Overload me!");
 	}
 
 	public void teleopInit() {
-		logger.warning("Default teleopInit() method... Overload me!");
+		ROBOT_LOGGER.warning("Default teleopInit() method... Overload me!");
 	}
 
 	public void autonomousInit() {
-		logger.warning("Default autonomousInit() method... Overload me!");
+		ROBOT_LOGGER.warning("Default autonomousInit() method... Overload me!");
 	}
 
 	private boolean m_isRpFirstRun = true;
 
 	public void robotPeriodic() {
 		if (m_isRpFirstRun) {
-			logger.warning("Default robotPeriodic() method... Overload me!");
+			ROBOT_LOGGER.warning("Default robotPeriodic() method... Overload me!");
 			m_isRpFirstRun = false;
 		}
 	}
@@ -73,7 +78,7 @@ public class Robot {
 
 	public void disabledPeriodic() {
 		if (m_isDpFirstRun) {
-			logger.warning("Default disabledPeriodic() method... Overload me!");
+			ROBOT_LOGGER.warning("Default disabledPeriodic() method... Overload me!");
 			m_isDpFirstRun = false;
 		}
 	}
@@ -82,7 +87,7 @@ public class Robot {
 
 	public void teleopPeriodic() {
 		if (m_isTpFirstRun) {
-			logger.warning("Default teleopPeriodic() method... Overload me!");
+			ROBOT_LOGGER.warning("Default teleopPeriodic() method... Overload me!");
 			m_isTpFirstRun = false;
 		}
 	}
@@ -91,13 +96,13 @@ public class Robot {
 
 	public void autonomousPeriodic() {
 		if (m_isApFirstRun) {
-			logger.warning("Default autonomousPeriodic() method... Overload me!");
+			ROBOT_LOGGER.warning("Default autonomousPeriodic() method... Overload me!");
 			m_isApFirstRun = false;
 		}
 	}
 
 	public void loopFunc() {
-		logger.finest("Its alive! Im running " + m_station.getGameType());
+		ROBOT_LOGGER.finest("Its alive! Im running " + m_station.getGameType());
 
 		if (isDisabled()) {
 			if (!m_calledDisabledInit) {
@@ -137,55 +142,47 @@ public class Robot {
 
 	public static void gbEV3_MAIN(Robot robot) {
 		try {
-			Logger.getGlobal().setLevel(Level.SEVERE);
+			Robot.ROBOT_LOGGER = Logger.getLogger("robot");
+			Robot.ROBOT_LOGGER.setUseParentHandlers(false);
 			FileHandler fHndl = new FileHandler("robot.log", false);
 			fHndl.setFormatter(new SimpleFormatter());
-			fHndl.setLevel(Level.FINE);
-			logger.addHandler(fHndl);
-			logger.setLevel(Level.ALL);
-			StationAccessor.init();
+			fHndl.setLevel(Level.FINEST);
+			ROBOT_LOGGER.addHandler(fHndl);
+			ROBOT_LOGGER.setLevel(Level.ALL);
 		} catch (SecurityException | IOException e) {
-			logger.severe(e.toString());
+			ROBOT_LOGGER.severe(e.toString());
 			Robot.exit(-1);
 		}
-		Logger.getGlobal().addHandler(new Handler() {
-			@Override
-			public void publish(LogRecord record) {
-				StationAccessor.getInstance().send(getFormatter().format(record));					
-			}
-			
-			@Override
-			public void flush() {
-				StationAccessor.getInstance().flush();
-			}
-			
-			@Override
-			public void close() throws SecurityException {
-				StationAccessor.getInstance().release();
-			}
-		});
-		
-
+		ROBOT_LOGGER.config("Initializing robot!");
+		StationAccessor.init();
+		robot.m_station = StationAccessor.getInstance();
 		Sound.beep();
 		try {
 			robot.robotInit();
 		} catch (Throwable t) {
-			logger.severe("Robots don't quit, but yours did!");
-			logger.severe(t.toString());
-			t.printStackTrace(StationAccessor.getInstance().getStationStream());
+			ROBOT_LOGGER.severe("Robots don't quit, but yours did!");
+			ROBOT_LOGGER.severe(t.toString());
+			ROBOT_LOGGER.severe(Arrays.toString(t.getStackTrace()));
+			Robot.exit(-1);
 		}
 		try {
-			logger.config("Robot running!");
+			ROBOT_LOGGER.config("Robot is running!");
 
 			while (Button.ESCAPE.isUp()) {
 				robot.m_station.waitForData(255);
 				robot.loopFunc();
 			}
+			
+			robot.m_station.release();
 		} catch (Throwable t) {
-			logger.severe("Robots don't quit, but yours did!");
-			logger.severe(t.toString());
-			t.printStackTrace(StationAccessor.getInstance().getStationStream());
-			Sound.buzz();
+			ROBOT_LOGGER.severe("Robots don't quit, but yours did!");
+			ROBOT_LOGGER.severe(t.toString());
+			ROBOT_LOGGER.severe(Arrays.toString(t.getStackTrace()));
+			Robot.exit(-1);
+		}
+		for (Handler hnd : ROBOT_LOGGER.getHandlers()) {
+			hnd.flush();
+			hnd.close();
 		}
 	}
 }

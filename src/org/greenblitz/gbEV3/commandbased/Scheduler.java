@@ -5,11 +5,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 import org.greenblitz.gbEV3.common.StationAccessor;
 
 public final class Scheduler {
-
+	
 	private static class FillerCommand extends Command {
 
 		static final FillerCommand INACTIVE = new FillerCommand();
@@ -31,10 +33,16 @@ public final class Scheduler {
 		}
 	}
 
-	private static final Scheduler instance = new Scheduler();
-
+	private static Scheduler instance;
+	private static Object instanceMutex = new Object();
+	
 	public static Scheduler getInstance() {
-		return instance;
+		synchronized (instanceMutex) {
+			if (instance == null) {
+				instance = new Scheduler();
+			}
+			return instance;
+		}
 	}
 
 	private final Map<Subsystem, Command> mCurrentCommands = new ConcurrentHashMap<>();
@@ -66,8 +74,8 @@ public final class Scheduler {
 
 		for (Subsystem system : mCurrentCommands.keySet())
 			if (mCurrentCommands.get(system) == FillerCommand.INACTIVE) {
-				mCurrentCommands.put(system, system.getDefaultCommand());
 				Robot.getRobotLogger().fine("added command " + system.getDefaultCommand());
+				mCurrentCommands.put(system, system.getDefaultCommand());
 			}
 
 		for (Command cmd : new HashSet<Command>(mCurrentCommands.values())) {
