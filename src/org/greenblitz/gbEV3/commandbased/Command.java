@@ -46,7 +46,6 @@ public abstract class Command {
 	public final void run() {
 		if (!m_initialized){
 			_initialize();
-			Robot.getRobotLogger().finest("initializing command" + this);
 		}
 		if (shouldRun()) {
 			m_running = true;
