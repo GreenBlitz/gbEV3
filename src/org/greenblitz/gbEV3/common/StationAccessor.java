@@ -380,10 +380,13 @@ public final class StationAccessor extends Thread {
 	@Override
 	public void run() {
 		Robot.getRobotLogger().fine("Running StationAccesor thread");
+
 		long t0;
 		long period = 200l;
 		while (m_keepThreadAlive){
 			t0 = System.currentTimeMillis();
+
+		while (m_keepThreadAlive)
 			aquireData();
 			long t1 = System.currentTimeMillis();
 			if(t1 - t0 < period){

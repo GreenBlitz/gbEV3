@@ -34,6 +34,7 @@ public class RobotMain extends Robot {
 		Scheduler.getInstance().run();
 		int i = (int)(j.getAxis(Axis.LY)*100);
 		LCD.drawInt(i, 4, 4);
+		Scheduler.getInstance().run();
 	}
 
 	public static void main(String[] agrs) {
