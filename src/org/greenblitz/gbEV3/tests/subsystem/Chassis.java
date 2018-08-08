@@ -12,10 +12,16 @@ public class Chassis extends Subsystem {
 	private RobotMotor left;
 	private RobotMotor right;
 
-	private static final Chassis chassis = new Chassis();
+	private static Chassis chassis;
+	private static final Object instanceMutex = new Object();
 
 	public static final Chassis getInstance() {
-		return chassis;
+		synchronized (instanceMutex) {
+			if (chassis == null)
+				chassis = new Chassis();
+			
+			return chassis;
+		}
 	}
 
 	public Chassis() {

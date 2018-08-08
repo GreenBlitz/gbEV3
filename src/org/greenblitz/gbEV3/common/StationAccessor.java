@@ -79,11 +79,31 @@ public final class StationAccessor extends Thread {
 	private GsonMessageAnalyzer<PeriodicMatchData> mPeriodicDataAnalyzer = new GsonMessageAnalyzer<>(
 			PeriodicMatchData.class);
 
-	private AtomicReference<InitialMatchData> mInitialDataCache = new AtomicReference<InitialMatchData>(null);
+	/*
+	 * private AtomicReference<InitialMatchData> mInitialDataCache = new
+	 * AtomicReference<InitialMatchData>(null);
+	 * 
+	 * private AtomicReference<PeriodicMatchData> mPeriodicDataCache = new
+	 * AtomicReference<PeriodicMatchData>( null);
+	 */
 
-	private AtomicReference<PeriodicMatchData> mPeriodicDataCache = new AtomicReference<PeriodicMatchData>(null);
+	private AtomicReference<InitialMatchData> mInitialDataCache = new AtomicReference<InitialMatchData>(
+			new InitialMatchData());
 
-	private AtomicReference<Integer> mCurrentUpdateCount = new AtomicReference<>(0);
+	private AtomicReference<PeriodicMatchData> mPeriodicDataCache = new AtomicReference<PeriodicMatchData>(
+			new PeriodicMatchData());
+
+	{
+		mInitialDataCache.get().alliance = Alliance.NONE;
+		mInitialDataCache.get().ip = "10.0.1.1";
+		mPeriodicDataCache.get().gameType = GameType.TELEOP;
+		mPeriodicDataCache.get().isEnabled = true;
+		mPeriodicDataCache.get().joysticksData = new NativeJoystickData[2];
+		mPeriodicDataCache.get().joysticksData[0] = new NativeJoystickData();
+	}
+
+	private AtomicReference<Integer> mCurrentUpdateCount = new AtomicReference<>(
+			0);
 
 	private ReentrantLock mLock = new ReentrantLock();
 	private Condition mHasDataArrived = mLock.newCondition();
@@ -116,7 +136,7 @@ public final class StationAccessor extends Thread {
 	@Override
 	public void run() {
 		while (Button.ESCAPE.isUp()) {
-			aquireData();
+			// aquireData();
 		}
 	}
 
@@ -141,6 +161,7 @@ public final class StationAccessor extends Thread {
 			return false;
 
 		return mPeriodicDataCache.get().isEnabled;
+
 	}
 
 	public boolean isDisabled() {
@@ -155,10 +176,12 @@ public final class StationAccessor extends Thread {
 	}
 
 	public boolean isAutonomous() {
+
 		if (!isPeriodicDataAvailable())
 			return false;
 
 		return mPeriodicDataCache.get().gameType == GameType.AUTO;
+
 	}
 
 	public GameType getCurrentGameType() {
@@ -188,45 +211,52 @@ public final class StationAccessor extends Thread {
 
 		return mInitialDataCache.get().gameMessage;
 	}
-	
+
 	public String getRemoteIp() {
 		if (!isInitialDataAvailable())
 			return null;
-		
+
 		return mInitialDataCache.get().ip;
 	}
 
 	public float getJoystickAxis(int stick, int port) {
 		if (stick < 0 || stick >= PeriodicMatchData.JOYSTICK_COUNT)
-			throw new IllegalArgumentException("no stick at index '" + stick + "'");
+			throw new IllegalArgumentException("no stick at index '" + stick
+					+ "'");
 
 		if (port < 0 || port >= NativeJoystickData.AXES_COUNT)
-			throw new IllegalArgumentException("no axis at index '" + stick + "'");
+			throw new IllegalArgumentException("no axis at index '" + stick
+					+ "'");
 
 		return mPeriodicDataCache.get().joysticksData[stick].axes[port];
 	}
 
 	public boolean getJoystickButton(int stick, int port) {
 		if (stick < 0 || stick >= PeriodicMatchData.JOYSTICK_COUNT)
-			throw new IllegalArgumentException("no stick at index '" + stick + "'");
+			throw new IllegalArgumentException("no stick at index '" + stick
+					+ "'");
 
 		if (port < 0 || port >= NativeJoystickData.AXES_COUNT)
-			throw new IllegalArgumentException("no button at index '" + stick + "'");
+			throw new IllegalArgumentException("no button at index '" + stick
+					+ "'");
 
 		return mPeriodicDataCache.get().joysticksData[stick].buttons[port];
 	}
 
 	private void init(int port) {
-		mStationSocket = getConnection(port);
-		mStationReader = getStationReader(mStationSocket);
-		mStationWriter = getStationWriter(mStationSocket);
+		/*
+		 * mStationSocket = getConnection(port); mStationReader =
+		 * getStationReader(mStationSocket); mStationWriter =
+		 * getStationWriter(mStationSocket);
+		 */
 	}
 
 	public void close() {
 		try {
 			mStationSocket.close();
 		} catch (IOException e) {
-			Robot.getRobotLogger().fatal("an error occured while closing station connection", e);
+			Robot.getRobotLogger().fatal(
+					"an error occured while closing station connection", e);
 			Robot.exit(9975);
 		}
 	}
@@ -247,7 +277,8 @@ public final class StationAccessor extends Thread {
 					if ((currentTime = System.currentTimeMillis()) - startTime > timeout) {
 						return false;
 					}
-					boolean signaled = mHasDataArrived.await(timeout + startTime - currentTime, TimeUnit.MILLISECONDS);
+					boolean signaled = mHasDataArrived.await(timeout
+							+ startTime - currentTime, TimeUnit.MILLISECONDS);
 					if (!signaled)
 						return false;
 				}
@@ -270,13 +301,15 @@ public final class StationAccessor extends Thread {
 		String msg = mStationReader.next();
 
 		if (msg.contains(new StringBuilder().append(CONNECTION_ENDED))) {
-			Robot.getRobotLogger().fatal("connection to station lost; robot is closing");
+			Robot.getRobotLogger().fatal(
+					"connection to station lost; robot is closing");
 			Robot.exit(9973);
 			return;
 		}
 
 		if (mInitialDataAnalyzer.test(msg)) {
-			if (!mInitialDataCache.compareAndSet(null, mInitialDataAnalyzer.parse(msg)))
+			if (!mInitialDataCache.compareAndSet(null,
+					mInitialDataAnalyzer.parse(msg)))
 				Robot.getRobotLogger()
 						.warn("an attempt was made to change the initial data cache after it was created");
 			return;
@@ -301,7 +334,8 @@ public final class StationAccessor extends Thread {
 		try {
 			return new Socket(InetAddress.getLoopbackAddress(), port);
 		} catch (IOException e) {
-			Robot.getRobotLogger().fatal("error while creating connection station", e);
+			Robot.getRobotLogger().fatal(
+					"error while creating connection station", e);
 			System.exit(9970);
 			return null;
 		}
@@ -311,7 +345,8 @@ public final class StationAccessor extends Thread {
 		try {
 			return new Scanner(socket.getInputStream());
 		} catch (IOException e) {
-			Robot.getRobotLogger().fatal("error while creating scanner from station", e);
+			Robot.getRobotLogger().fatal(
+					"error while creating scanner from station", e);
 			Robot.exit(9971);
 			return null;
 		}
@@ -321,7 +356,8 @@ public final class StationAccessor extends Thread {
 		try {
 			return new PrintStream(socket.getOutputStream());
 		} catch (IOException e) {
-			Robot.getRobotLogger().fatal("error while creating stream to station", e);
+			Robot.getRobotLogger().fatal(
+					"error while creating stream to station", e);
 			Robot.exit(9972);
 			return null;
 		}

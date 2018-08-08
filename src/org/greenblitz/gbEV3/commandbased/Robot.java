@@ -12,6 +12,8 @@ import org.apache.logging.log4j.Logger;
 import org.greenblitz.gbEV3.common.StationAccessor;
 
 import lejos.hardware.Button;
+import lejos.hardware.Key;
+import lejos.hardware.KeyListener;
 import lejos.hardware.Sound;
 import lejos.remote.ev3.RemoteEV3;
 
@@ -59,14 +61,16 @@ public class Robot {
 	}
 
 	public void autonomousInit() {
-		getRobotLogger().warn("Default autonomousInit() method... Overload me!");
+		getRobotLogger()
+				.warn("Default autonomousInit() method... Overload me!");
 	}
 
 	private boolean m_isRpFirstRun = true;
 
 	public void robotPeriodic() {
 		if (m_isRpFirstRun) {
-			getRobotLogger().warn("Default robotPeriodic() method... Overload me!");
+			getRobotLogger().warn(
+					"Default robotPeriodic() method... Overload me!");
 			m_isRpFirstRun = false;
 		}
 	}
@@ -75,7 +79,8 @@ public class Robot {
 
 	public void disabledPeriodic() {
 		if (m_isDpFirstRun) {
-			getRobotLogger().warn("Default disabledPeriodic() method... Overload me!");
+			getRobotLogger().warn(
+					"Default disabledPeriodic() method... Overload me!");
 			m_isDpFirstRun = false;
 		}
 	}
@@ -84,7 +89,8 @@ public class Robot {
 
 	public void teleopPeriodic() {
 		if (m_isTpFirstRun) {
-			getRobotLogger().warn("Default teleopPeriodic() method... Overload me!");
+			getRobotLogger().warn(
+					"Default teleopPeriodic() method... Overload me!");
 			m_isTpFirstRun = false;
 		}
 	}
@@ -93,7 +99,8 @@ public class Robot {
 
 	public void autonomousPeriodic() {
 		if (m_isApFirstRun) {
-			getRobotLogger().warn("Default autonomousPeriodic() method... Overload me!");
+			getRobotLogger().warn(
+					"Default autonomousPeriodic() method... Overload me!");
 			m_isApFirstRun = false;
 		}
 	}
@@ -127,7 +134,8 @@ public class Robot {
 				teleopPeriodic();
 				break;
 			default:
-				throw new IllegalStateException("Illegal game mode: " + m_station.getCurrentGameType());
+				throw new IllegalStateException("Illegal game mode: "
+						+ m_station.getCurrentGameType());
 			}
 
 			m_calledDisabledInit = false;
@@ -138,7 +146,9 @@ public class Robot {
 		try {
 			return new RemoteEV3(ip);
 		} catch (RemoteException | MalformedURLException | NotBoundException e) {
-			Robot.getRobotLogger().fatal("an error occured while trying to connect ot remote ev3 brick at ip " + ip, e);
+			Robot.getRobotLogger().fatal(
+					"an error occured while trying to connect ot remote ev3 brick at ip "
+							+ ip, e);
 		}
 		return null;
 	}
@@ -151,11 +161,12 @@ public class Robot {
 		getRobotLogger().info("Initializing robot!");
 		StationAccessor.init();
 		robot.m_station = StationAccessor.getInstance();
-		/*
-		 * String addr = robot.m_station.getRemoteIp(); while (addr == null) {
-		 * addr = robot.m_station.getRemoteIp(); }
-		 */
-		String addr = "10.0.1.1";
+
+		String addr = robot.m_station.getRemoteIp();
+		while (addr == null) {
+			addr = robot.m_station.getRemoteIp();
+		}
+
 		mBrick = getBrick(addr);
 		Sound.beep();
 		try {
@@ -168,7 +179,7 @@ public class Robot {
 			getRobotLogger().info("Robot is running!");
 
 			while (Button.ESCAPE.isUp()) {
-				robot.m_station.waitForData();
+				//robot.m_station.waitForData();
 				robot.competitionPeriodic();
 			}
 

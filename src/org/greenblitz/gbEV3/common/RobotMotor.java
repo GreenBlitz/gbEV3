@@ -23,7 +23,7 @@ public class RobotMotor {
 			return activeInstances.get(port);
 		}
 	}
-
+	
 	private RobotMotor(RobotMotorPort port) {
 		synchronized (instancesLock) {
 			mRegulatedMotor = Robot.getBrick().createRegulatedMotor(port.name, 'M');
