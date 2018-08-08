@@ -5,8 +5,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.LogManager;
-import java.util.logging.Logger;
 
 import org.greenblitz.gbEV3.common.StationAccessor;
 
@@ -61,7 +59,7 @@ public final class Scheduler {
 			mCurrentCommands.put(requirement, requirement.getDefaultCommand());
 		}
 		
-		Robot.getRobotLogger().fine("removing command " + command);
+		Robot.getRobotLogger().debug("removing command " + command);
 		return true;
 	}
 
@@ -74,12 +72,12 @@ public final class Scheduler {
 
 		for (Subsystem system : mCurrentCommands.keySet())
 			if (mCurrentCommands.get(system) == FillerCommand.INACTIVE) {
-				Robot.getRobotLogger().fine("added command " + system.getDefaultCommand());
+				Robot.getRobotLogger().debug("added command " + system.getDefaultCommand());
 				mCurrentCommands.put(system, system.getDefaultCommand());
 			}
 
 		for (Command cmd : new HashSet<Command>(mCurrentCommands.values())) {
-			Robot.getRobotLogger().finest("should run command '" + cmd + "', will run it? " + cmd.shouldRun());
+			Robot.getRobotLogger().trace("should run command '" + cmd + "', will run it? " + cmd.shouldRun());
 			if (cmd.shouldRun()) {
 				cmd.run();
 			} else {
@@ -121,7 +119,7 @@ public final class Scheduler {
 		for (Subsystem requirement : command.getRequirements())
 			mCurrentCommands.put(requirement, command);
 		
-		Robot.getRobotLogger().fine("added command " + command);
+		Robot.getRobotLogger().debug("added command " + command);
 		return true;
 	}
 
@@ -143,7 +141,7 @@ public final class Scheduler {
 	}
 
 	public void registerSubsystem(Subsystem system) {
-		Robot.getRobotLogger().fine("registering subsystem " + system);
+		Robot.getRobotLogger().debug("registering subsystem " + system);
 		mCurrentCommands.put(system, FillerCommand.INACTIVE);
 	}
 

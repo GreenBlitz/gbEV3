@@ -1,4 +1,4 @@
-package org.greenblitz.gbEV3.tests.full.robot;
+package org.greenblitz.gbEV3.tests.robot;
 
 import lejos.hardware.lcd.LCD;
 
@@ -6,7 +6,7 @@ import org.greenblitz.gbEV3.commandbased.Robot;
 import org.greenblitz.gbEV3.commandbased.Scheduler;
 import org.greenblitz.gbEV3.common.joystick.Axis;
 import org.greenblitz.gbEV3.common.joystick.Joystick;
-import org.greenblitz.gbEV3.tests.full.subsystem.Chassis;
+import org.greenblitz.gbEV3.tests.subsystem.Chassis;
 
 public class RobotMain extends Robot {
 	
@@ -25,7 +25,7 @@ public class RobotMain extends Robot {
 	@Override
 	public void teleopInit() {
 		System.out.println("teleop");
-		Robot.getRobotLogger().fine("teleop init called");
+		Robot.getRobotLogger().debug("teleop init called");
 	}
 
 	@Override

@@ -1,30 +1,27 @@
 package org.greenblitz.gbEV3.commandbased;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.util.Arrays;
-import java.util.logging.FileHandler;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.greenblitz.gbEV3.common.StationAccessor;
 
 import lejos.hardware.Button;
 import lejos.hardware.Sound;
+import lejos.remote.ev3.RemoteEV3;
 
 public class Robot {
-	protected static Logger ROBOT_LOGGER;
+	private static RemoteEV3 mBrick;
 
-	static {
-	      System.setProperty("java.util.logging.SimpleFormatter.format",
-	              "%2$s%n[%4$s] %5$s%n%6$s");
-	  }
-	
 	public static final Logger getRobotLogger() {
-		return ROBOT_LOGGER;
+		return LogManager.getLogger("robot");
 	}
-	
+
 	private StationAccessor m_station;
 	private boolean m_calledDisabledInit = false;
 
@@ -46,30 +43,30 @@ public class Robot {
 	}
 
 	public boolean isTeleop() {
-		return m_station.isTeleop();
+		return m_station.isTeleoperated();
 	}
 
 	public void robotInit() {
-		ROBOT_LOGGER.warning("Default robotInit() method... Overload me!");
+		getRobotLogger().warn("Default robotInit() method... Overload me!");
 	}
 
 	public void disabledInit() {
-		ROBOT_LOGGER.warning("Default disabledInit() method... Overload me!");
+		getRobotLogger().warn("Default disabledInit() method... Overload me!");
 	}
 
 	public void teleopInit() {
-		ROBOT_LOGGER.warning("Default teleopInit() method... Overload me!");
+		getRobotLogger().warn("Default teleopInit() method... Overload me!");
 	}
 
 	public void autonomousInit() {
-		ROBOT_LOGGER.warning("Default autonomousInit() method... Overload me!");
+		getRobotLogger().warn("Default autonomousInit() method... Overload me!");
 	}
 
 	private boolean m_isRpFirstRun = true;
 
 	public void robotPeriodic() {
 		if (m_isRpFirstRun) {
-			ROBOT_LOGGER.warning("Default robotPeriodic() method... Overload me!");
+			getRobotLogger().warn("Default robotPeriodic() method... Overload me!");
 			m_isRpFirstRun = false;
 		}
 	}
@@ -78,7 +75,7 @@ public class Robot {
 
 	public void disabledPeriodic() {
 		if (m_isDpFirstRun) {
-			ROBOT_LOGGER.warning("Default disabledPeriodic() method... Overload me!");
+			getRobotLogger().warn("Default disabledPeriodic() method... Overload me!");
 			m_isDpFirstRun = false;
 		}
 	}
@@ -87,7 +84,7 @@ public class Robot {
 
 	public void teleopPeriodic() {
 		if (m_isTpFirstRun) {
-			ROBOT_LOGGER.warning("Default teleopPeriodic() method... Overload me!");
+			getRobotLogger().warn("Default teleopPeriodic() method... Overload me!");
 			m_isTpFirstRun = false;
 		}
 	}
@@ -96,14 +93,12 @@ public class Robot {
 
 	public void autonomousPeriodic() {
 		if (m_isApFirstRun) {
-			ROBOT_LOGGER.warning("Default autonomousPeriodic() method... Overload me!");
+			getRobotLogger().warn("Default autonomousPeriodic() method... Overload me!");
 			m_isApFirstRun = false;
 		}
 	}
 
-	public void loopFunc() {
-		ROBOT_LOGGER.finest("Its alive! Im running " + m_station.getGameType());
-
+	private void competitionPeriodic() {
 		if (isDisabled()) {
 			if (!m_calledDisabledInit) {
 				disabledInit();
@@ -116,7 +111,7 @@ public class Robot {
 		robotPeriodic();
 
 		if (isEnabled()) {
-			switch (m_station.getGameType()) {
+			switch (m_station.getCurrentGameType()) {
 			case AUTO:
 				if (m_isApFirstRun) {
 					autonomousInit();
@@ -132,57 +127,55 @@ public class Robot {
 				teleopPeriodic();
 				break;
 			default:
-				throw new IllegalStateException("Illegal game mode: "
-						+ m_station.getGameType());
+				throw new IllegalStateException("Illegal game mode: " + m_station.getCurrentGameType());
 			}
 
 			m_calledDisabledInit = false;
 		}
 	}
 
-	public static void gbEV3_MAIN(Robot robot) {
+	private static RemoteEV3 getBrick(String ip) {
 		try {
-			Robot.ROBOT_LOGGER = Logger.getLogger("robot");
-			Robot.ROBOT_LOGGER.setUseParentHandlers(false);
-			FileHandler fHndl = new FileHandler("robot.log", false);
-			fHndl.setFormatter(new SimpleFormatter());
-			fHndl.setLevel(Level.FINEST);
-			ROBOT_LOGGER.addHandler(fHndl);
-			ROBOT_LOGGER.setLevel(Level.ALL);
-		} catch (SecurityException | IOException e) {
-			ROBOT_LOGGER.severe(e.toString());
-			Robot.exit(-1);
+			return new RemoteEV3(ip);
+		} catch (RemoteException | MalformedURLException | NotBoundException e) {
+			Robot.getRobotLogger().fatal("an error occured while trying to connect ot remote ev3 brick at ip " + ip, e);
 		}
-		ROBOT_LOGGER.config("Initializing robot!");
+		return null;
+	}
+
+	public static RemoteEV3 getBrick() {
+		return mBrick;
+	}
+
+	public static void gbEV3_MAIN(Robot robot) {
+		getRobotLogger().info("Initializing robot!");
 		StationAccessor.init();
 		robot.m_station = StationAccessor.getInstance();
+		/*
+		 * String addr = robot.m_station.getRemoteIp(); while (addr == null) {
+		 * addr = robot.m_station.getRemoteIp(); }
+		 */
+		String addr = "10.0.1.1";
+		mBrick = getBrick(addr);
 		Sound.beep();
 		try {
 			robot.robotInit();
 		} catch (Throwable t) {
-			ROBOT_LOGGER.severe("Robots don't quit, but yours did!");
-			ROBOT_LOGGER.severe(t.toString());
-			ROBOT_LOGGER.severe(Arrays.toString(t.getStackTrace()));
+			getRobotLogger().fatal("Robots don't quit, but yours did!", t);
 			Robot.exit(-1);
 		}
 		try {
-			ROBOT_LOGGER.config("Robot is running!");
+			getRobotLogger().info("Robot is running!");
 
 			while (Button.ESCAPE.isUp()) {
-				robot.m_station.waitForData(255);
-				robot.loopFunc();
+				robot.m_station.waitForData();
+				robot.competitionPeriodic();
 			}
-			
-			robot.m_station.release();
+
+			robot.m_station.close();
 		} catch (Throwable t) {
-			ROBOT_LOGGER.severe("Robots don't quit, but yours did!");
-			ROBOT_LOGGER.severe(t.toString());
-			ROBOT_LOGGER.severe(Arrays.toString(t.getStackTrace()));
+			getRobotLogger().fatal("Robots don't quit, but yours did!", t);
 			Robot.exit(-1);
-		}
-		for (Handler hnd : ROBOT_LOGGER.getHandlers()) {
-			hnd.flush();
-			hnd.close();
 		}
 	}
 }
