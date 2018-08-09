@@ -19,17 +19,7 @@ public enum Axis {
 	/**
 	 * Right stick's Y axis.
 	 */
-	RY(2), 
-	
-	/**
-	 * Right trigger's axis.
-	 */
-	RT(4), 
-	
-	/**
-	 * Left trigger's axis.
-	 */
-	LT(5);
+	RY(2);
 	
 	public final int id;
 	

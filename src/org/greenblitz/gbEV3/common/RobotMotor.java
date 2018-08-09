@@ -4,9 +4,10 @@ import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.greenblitz.gbEV3.commandbased.Robot;
-
+import lejos.hardware.DeviceException;
 import lejos.remote.ev3.RMIRegulatedMotor;
+
+import org.greenblitz.gbEV3.commandbased.Robot;
 
 public class RobotMotor {
 
@@ -23,11 +24,45 @@ public class RobotMotor {
 			return activeInstances.get(port);
 		}
 	}
-	
+
+	public static void closeAllMotors() {
+		for (RobotMotor motor : activeInstances.values()) {
+			motor.stop();
+			motor.close();
+		}
+	}
+
+	public void stop() {
+		try {
+			mRegulatedMotor.setSpeed(0);
+		} catch (RemoteException e) {
+			Robot.getRobotLogger().fatal(
+					"an error occured while trying to stop motor", e);
+		}
+	}
+
+	private void close() {
+		try {
+			mRegulatedMotor.close();
+		} catch (RemoteException e) {
+			Robot.getRobotLogger().fatal(
+					"an error occured while trying to close motor", e);
+		}
+	}
+
 	private RobotMotor(RobotMotorPort port) {
-		synchronized (instancesLock) {
-			mRegulatedMotor = Robot.getBrick().createRegulatedMotor(port.name, 'M');
-			activeInstances.put(port, this);
+		try {
+			synchronized (instancesLock) {
+				mRegulatedMotor = Robot.getBrick().createRegulatedMotor(
+						port.name, 'M');
+				activeInstances.put(port, this);
+				flt(true);
+			}
+		} catch (DeviceException e) {
+			Robot.getRobotLogger().fatal(
+					"unable to instantiate robot motor at port " + port
+							+ ", try restarting the robot!", e);
+			Robot.exit(-2, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -35,8 +70,8 @@ public class RobotMotor {
 		try {
 			mRegulatedMotor.flt(immediateReturn);
 		} catch (RemoteException e) {
-
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -46,6 +81,7 @@ public class RobotMotor {
 		} catch (RemoteException e) {
 
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			;
 		}
 	}
@@ -54,8 +90,8 @@ public class RobotMotor {
 		try {
 			return mRegulatedMotor.getLimitAngle();
 		} catch (RemoteException e) {
-
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return 0;
 		}
 	}
@@ -76,15 +112,24 @@ public class RobotMotor {
 
 			if (Math.abs(power) > 1)
 				power /= Math.abs(power);
-			
+
 			int speed = (int) (getMaxSpeed() * power);
+			
 			mRegulatedMotor.setSpeed(speed);
-			if (speed < 0)
-				mRegulatedMotor.backward();
-			else
-				mRegulatedMotor.forward();
+			if (!mRegulatedMotor.isMoving()) {
+				if (speed < 0)
+					mRegulatedMotor.backward();
+				else
+					mRegulatedMotor.forward();
+			} else {
+				if (speed < 0 && mRegulatedMotor.getSpeed() > 0)
+					mRegulatedMotor.backward();
+				if (speed > 0 && mRegulatedMotor.getSpeed() < 0)
+					mRegulatedMotor.forward();
+			}
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -93,6 +138,7 @@ public class RobotMotor {
 			return mRegulatedMotor.getSpeed();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return 0;
 		}
 	}
@@ -102,6 +148,7 @@ public class RobotMotor {
 			return mRegulatedMotor.getMaxSpeed();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return 0;
 		}
 	}
@@ -111,6 +158,7 @@ public class RobotMotor {
 			return mRegulatedMotor.isStalled();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return false;
 		}
 	}
@@ -120,6 +168,7 @@ public class RobotMotor {
 			mRegulatedMotor.setStallThreshold(error, time);
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -128,6 +177,7 @@ public class RobotMotor {
 			mRegulatedMotor.setAcceleration(acceleration);
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -136,6 +186,7 @@ public class RobotMotor {
 			mRegulatedMotor.resetTachoCount();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -144,6 +195,7 @@ public class RobotMotor {
 			return mRegulatedMotor.getTachoCount();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return 0;
 		}
 	}
@@ -153,6 +205,7 @@ public class RobotMotor {
 			return mRegulatedMotor.isMoving();
 		} catch (RemoteException e) {
 			Robot.getRobotLogger().fatal(e);
+			Robot.exit(-3, Thread.currentThread().getStackTrace()[0]);
 			return false;
 		}
 	}

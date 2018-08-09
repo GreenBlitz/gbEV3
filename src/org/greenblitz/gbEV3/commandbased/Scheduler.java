@@ -7,9 +7,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.greenblitz.gbEV3.common.StationAccessor;
+import org.greenblitz.gbEV3.common.joystick.Joystick;
 
 public final class Scheduler {
-	
+	/**
+	 * Filler Command. no-operation command for subsystems.
+	 */
 	private static class FillerCommand extends Command {
 
 		static final FillerCommand INACTIVE = new FillerCommand();
@@ -33,7 +36,7 @@ public final class Scheduler {
 
 	private static Scheduler instance;
 	private static Object instanceMutex = new Object();
-	
+
 	public static Scheduler getInstance() {
 		synchronized (instanceMutex) {
 			if (instance == null) {
@@ -58,8 +61,11 @@ public final class Scheduler {
 		for (Subsystem requirement : command.getRequirements()) {
 			mCurrentCommands.put(requirement, requirement.getDefaultCommand());
 		}
-		
-		Robot.getRobotLogger().debug("removing command " + command);
+
+		for (Subsystem sys : command.getRequirements())
+			if (sys.getDefaultCommand() != command)
+				Robot.getRobotLogger().info("removing command " + command);
+
 		return true;
 	}
 
@@ -72,12 +78,20 @@ public final class Scheduler {
 
 		for (Subsystem system : mCurrentCommands.keySet())
 			if (mCurrentCommands.get(system) == FillerCommand.INACTIVE) {
-				Robot.getRobotLogger().debug("added command " + system.getDefaultCommand());
-				mCurrentCommands.put(system, system.getDefaultCommand());
+				Robot.getRobotLogger().debug(
+						"added command " + system.getDefaultCommand());
+				if (system.getDefaultCommand() != null)
+					mCurrentCommands.put(system, system.getDefaultCommand());
+				else
+					mCurrentCommands.put(system, new FillerCommand());
 			}
 
+		Joystick.executeMePlease();
+
 		for (Command cmd : new HashSet<Command>(mCurrentCommands.values())) {
-			Robot.getRobotLogger().trace("should run command '" + cmd + "', will run it? " + cmd.shouldRun());
+			Robot.getRobotLogger().trace(
+					"should run command '" + cmd + "', will run it? "
+							+ cmd.shouldRun());
 			if (cmd.shouldRun()) {
 				cmd.run();
 			} else {
@@ -88,7 +102,7 @@ public final class Scheduler {
 		synchronized (mAddedCommandsMutex) {
 			for (Command cmd : mAddedCommands)
 				updateCurrentCommands(cmd);
-			
+
 			mAddedCommands.clear();
 		}
 	}
@@ -113,12 +127,11 @@ public final class Scheduler {
 		for (Command cmd : mCurrentCommands.values())
 			for (Subsystem requirement : command.getRequirements())
 				if (cmd.doesRequire(requirement))
-					removeCommand(cmd, false); 
-					
+					removeCommand(cmd, false);
 
 		for (Subsystem requirement : command.getRequirements())
 			mCurrentCommands.put(requirement, command);
-		
+
 		Robot.getRobotLogger().debug("added command " + command);
 		return true;
 	}

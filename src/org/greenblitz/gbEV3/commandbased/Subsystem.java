@@ -24,8 +24,9 @@ public abstract class Subsystem {
 	protected abstract void initDefaultCommand();
 	
 	public boolean setDefaultCommand(Command command) {
-		if (command == null)
-			m_defaultCommand = new NoneCommand(this);
+		m_defaultCommand = new NoneCommand(this);
+		
+		if (command == null) return true;
 		
 		if (!command.doesRequire(this) || command.getRequirementCount() != 1) 
 				return false;

@@ -1,11 +1,8 @@
-package org.greenblitz.gbEV3.tests.subsystem;
+package org.greenblitz.gbEV3.tests.reactiontim;
 
 import org.greenblitz.gbEV3.commandbased.Subsystem;
 import org.greenblitz.gbEV3.common.RobotMotor;
 import org.greenblitz.gbEV3.common.RobotMotorPort;
-import org.greenblitz.gbEV3.tests.commands.DriveMotors;
-
-import lejos.hardware.port.MotorPort;
 
 public class Chassis extends Subsystem {
 
@@ -36,7 +33,7 @@ public class Chassis extends Subsystem {
 
 	@Override
 	protected void initDefaultCommand() {
-		setDefaultCommand(new DriveMotors());
+		setDefaultCommand(new DriveMotors(1000, 1000));
 	}
 
 }

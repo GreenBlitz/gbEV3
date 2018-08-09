@@ -1,7 +1,9 @@
 package org.greenblitz.gbEV3.common.joystick;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.greenblitz.gbEV3.commandbased.Command;
 import org.greenblitz.gbEV3.common.StationAccessor;
@@ -9,9 +11,18 @@ import org.greenblitz.gbEV3.common.Tuple3;
 
 public class Joystick {
 
+	private static Map<Integer, Joystick> activeInstances = new HashMap<>();
+
 	private int port;
 	private List<Tuple3<BindType, Integer, Command>> bindTypeList;
-	private StationAccessor station;
+	private static StationAccessor station = StationAccessor.getInstance();
+
+	public static final synchronized Joystick atPort(int port) {
+		if (!activeInstances.containsKey(port))
+			activeInstances.put(port, new Joystick(port));
+
+		return activeInstances.get(port);
+	}
 
 	/**
 	 * Construct a Joystick object.
@@ -19,11 +30,9 @@ public class Joystick {
 	 * @param port
 	 *            the Joystick's port
 	 */
-	public Joystick(int port) {
-		// TODO change port to 0
+	private Joystick(int port) {
 		this.port = port;
 		bindTypeList = new LinkedList<>();
-		station = StationAccessor.getInstance();
 	}
 
 	/**
@@ -103,9 +112,9 @@ public class Joystick {
 		bindTypeList.add(new Tuple3<BindType, Integer, Command>(t, b.id, cmd));
 	}
 
-	public void executeMePlease() {
-		for (Tuple3<BindType, Integer, Command> boyo : bindTypeList) {
-			boyo.first.executeBind(port, boyo.second, boyo.third);
-		}
+	public static void executeMePlease() {
+		for (Joystick j : activeInstances.values())
+			for (Tuple3<BindType, Integer, Command> boyo : j.bindTypeList)
+				boyo.first.executeBind(j.port, boyo.second, boyo.third);
 	}
 }

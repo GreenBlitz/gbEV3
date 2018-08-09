@@ -1,21 +1,21 @@
 package org.greenblitz.gbEV3.commandbased;
 
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.util.Arrays;
-
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.greenblitz.gbEV3.common.StationAccessor;
 
 import lejos.hardware.Button;
 import lejos.hardware.Key;
 import lejos.hardware.KeyListener;
 import lejos.hardware.Sound;
+import lejos.hardware.lcd.LCD;
 import lejos.remote.ev3.RemoteEV3;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.greenblitz.gbEV3.common.RobotMotor;
+import org.greenblitz.gbEV3.common.StationAccessor;
+import org.greenblitz.gbEV3.common.joystick.Joystick;
 
 public class Robot {
 	private static RemoteEV3 mBrick;
@@ -27,9 +27,18 @@ public class Robot {
 	private StationAccessor m_station;
 	private boolean m_calledDisabledInit = false;
 
-	public static void exit(int code) {
-		Sound.buzz();
+	public static void exit(int code, StackTraceElement frame) {
+		try {
+			cleanup();
+		} catch (Throwable t) {
+		}
+		if (frame != null)
+			Robot.getRobotLogger().info("Robot exited peacfully at frame " + frame);
 		System.exit(code);
+	}
+	
+	public static void exit(int code) {
+		exit(code, null);
 	}
 
 	public boolean isDisabled() {
@@ -137,8 +146,8 @@ public class Robot {
 				throw new IllegalStateException("Illegal game mode: "
 						+ m_station.getCurrentGameType());
 			}
-
 			m_calledDisabledInit = false;
+			Scheduler.getInstance().run();
 		}
 	}
 
@@ -158,6 +167,19 @@ public class Robot {
 	}
 
 	public static void gbEV3_MAIN(Robot robot) {
+		Button.ESCAPE.addKeyListener(new KeyListener() {
+
+			@Override
+			public void keyReleased(Key k) {
+				Robot.exit(-1);
+			}
+
+			@Override
+			public void keyPressed(Key k) {
+
+			}
+		});
+
 		getRobotLogger().info("Initializing robot!");
 		StationAccessor.init();
 		robot.m_station = StationAccessor.getInstance();
@@ -166,27 +188,37 @@ public class Robot {
 		while (addr == null) {
 			addr = robot.m_station.getRemoteIp();
 		}
-
+		
+		Robot.getRobotLogger().info("Trying to connect to remote ev3 brick at ip " + addr);
 		mBrick = getBrick(addr);
 		Sound.beep();
+		LCD.drawString("Running...", 0, 0);
+		Robot.getRobotLogger().info("Successfully connected to remote brick");
 		try {
 			robot.robotInit();
 		} catch (Throwable t) {
 			getRobotLogger().fatal("Robots don't quit, but yours did!", t);
-			Robot.exit(-1);
+			Robot.exit(-1, Thread.currentThread().getStackTrace()[0]);
 		}
 		try {
 			getRobotLogger().info("Robot is running!");
 
 			while (Button.ESCAPE.isUp()) {
-				//robot.m_station.waitForData();
+				robot.m_station.waitForData();
 				robot.competitionPeriodic();
 			}
-
+			
 			robot.m_station.close();
 		} catch (Throwable t) {
 			getRobotLogger().fatal("Robots don't quit, but yours did!", t);
-			Robot.exit(-1);
+			Robot.exit(-1, Thread.currentThread().getStackTrace()[0]);
+		} finally {
+			cleanup();
 		}
+	}
+	
+	private static void cleanup() {
+		Sound.buzz();
+		RobotMotor.closeAllMotors();
 	}
 }

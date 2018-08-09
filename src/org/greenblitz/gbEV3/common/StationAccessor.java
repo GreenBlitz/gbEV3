@@ -2,17 +2,22 @@ package org.greenblitz.gbEV3.common;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.greenblitz.gbEV3.commandbased.Robot;
-
 import lejos.hardware.Button;
+import lejos.hardware.Sound;
+
+import org.greenblitz.gbEV3.commandbased.Robot;
 
 public final class StationAccessor extends Thread {
 	public enum GameType {
@@ -50,6 +55,14 @@ public final class StationAccessor extends Thread {
 			buttons = new boolean[BUTTON_COUNT];
 			isValid = true;
 		}
+
+		@Override
+		public String toString() {
+			return "NativeJoystickData [axes=" + Arrays.toString(axes)
+					+ ", buttons=" + Arrays.toString(buttons) + ", isValid="
+					+ isValid + "]";
+		}
+
 	}
 
 	public static final class InitialMatchData {
@@ -57,6 +70,13 @@ public final class StationAccessor extends Thread {
 		public String gameMessage;
 		public Alliance alliance;
 		public String ip;
+
+		@Override
+		public String toString() {
+			return "InitialMatchData [eventName=" + eventName
+					+ ", gameMessage=" + gameMessage + ", alliance=" + alliance
+					+ ", ip=" + ip + "]";
+		}
 	}
 
 	public static final class PeriodicMatchData {
@@ -65,11 +85,21 @@ public final class StationAccessor extends Thread {
 		public NativeJoystickData[] joysticksData;
 		public boolean isEnabled;
 		public GameType gameType;
+
+		@Override
+		public String toString() {
+			return "PeriodicMatchData [joysticksData="
+					+ Arrays.toString(joysticksData) + ", isEnabled="
+					+ isEnabled + ", gameType=" + gameType + "]";
+		}
+
 	}
 
 	public static final int DEFAULT_PORT = 4444;
 
 	public static final char CONNECTION_ENDED = (char) (byte) -1;
+
+	public static final int CONNECT_TIMEOUT = 5000;
 
 	private static StationAccessor instance;
 	private static Object instanceLock = new Object();
@@ -79,28 +109,11 @@ public final class StationAccessor extends Thread {
 	private GsonMessageAnalyzer<PeriodicMatchData> mPeriodicDataAnalyzer = new GsonMessageAnalyzer<>(
 			PeriodicMatchData.class);
 
-	/*
-	 * private AtomicReference<InitialMatchData> mInitialDataCache = new
-	 * AtomicReference<InitialMatchData>(null);
-	 * 
-	 * private AtomicReference<PeriodicMatchData> mPeriodicDataCache = new
-	 * AtomicReference<PeriodicMatchData>( null);
-	 */
-
 	private AtomicReference<InitialMatchData> mInitialDataCache = new AtomicReference<InitialMatchData>(
-			new InitialMatchData());
+			null);
 
 	private AtomicReference<PeriodicMatchData> mPeriodicDataCache = new AtomicReference<PeriodicMatchData>(
-			new PeriodicMatchData());
-
-	{
-		mInitialDataCache.get().alliance = Alliance.NONE;
-		mInitialDataCache.get().ip = "10.0.1.1";
-		mPeriodicDataCache.get().gameType = GameType.TELEOP;
-		mPeriodicDataCache.get().isEnabled = true;
-		mPeriodicDataCache.get().joysticksData = new NativeJoystickData[2];
-		mPeriodicDataCache.get().joysticksData[0] = new NativeJoystickData();
-	}
+			null);
 
 	private AtomicReference<Integer> mCurrentUpdateCount = new AtomicReference<>(
 			0);
@@ -113,30 +126,49 @@ public final class StationAccessor extends Thread {
 
 	private Socket mStationSocket;
 
-	private StationAccessor() {
-		init(DEFAULT_PORT);
+	private StationAccessor(int port) {
+		Robot.getRobotLogger().info("Connecting to the Driver Station...");
+		Socket station = new Socket();
+		try {
+			Sound.twoBeeps();
+			station.connect(
+					new InetSocketAddress(InetAddress.getLoopbackAddress(),
+							port), CONNECT_TIMEOUT);
+		} catch (ConnectException | SocketTimeoutException e) {
+			if (e.getMessage() == "Connection refused")
+				Robot.getRobotLogger().fatal(
+						"no active station was found on the local host", e);
+		} catch (IOException e) {
+			Robot.getRobotLogger().fatal(e);
+		} finally {
+			if (!station.isConnected()) {
+				Robot.getRobotLogger().fatal(
+						"Connection to Driver Station could not be made");
+				Robot.exit(9971, Thread.currentThread().getStackTrace()[0]);
+			}
+		}
+		Sound.beepSequenceUp();
+		Robot.getRobotLogger().info(
+				"Successfully connected to the Driver Station");
+		init(station);
 	}
 
 	public static void init() {
 		synchronized (instanceLock) {
 			if (instance == null)
-				instance = new StationAccessor();
+				instance = new StationAccessor(DEFAULT_PORT);
+			instance.start();
 		}
 	}
 
 	public static StationAccessor getInstance() {
-		synchronized (instanceLock) {
-			if (instance == null)
-				instance = new StationAccessor();
-
-			return instance;
-		}
+		return instance;
 	}
 
 	@Override
 	public void run() {
 		while (Button.ESCAPE.isUp()) {
-			// aquireData();
+			aquireData();
 		}
 	}
 
@@ -176,7 +208,6 @@ public final class StationAccessor extends Thread {
 	}
 
 	public boolean isAutonomous() {
-
 		if (!isPeriodicDataAvailable())
 			return false;
 
@@ -243,12 +274,10 @@ public final class StationAccessor extends Thread {
 		return mPeriodicDataCache.get().joysticksData[stick].buttons[port];
 	}
 
-	private void init(int port) {
-		/*
-		 * mStationSocket = getConnection(port); mStationReader =
-		 * getStationReader(mStationSocket); mStationWriter =
-		 * getStationWriter(mStationSocket);
-		 */
+	private void init(Socket stationSocket) {
+		mStationSocket = stationSocket;
+		mStationReader = getStationReader(mStationSocket);
+		mStationWriter = getStationWriter(mStationSocket);
 	}
 
 	public void close() {
@@ -257,7 +286,7 @@ public final class StationAccessor extends Thread {
 		} catch (IOException e) {
 			Robot.getRobotLogger().fatal(
 					"an error occured while closing station connection", e);
-			Robot.exit(9975);
+			Robot.exit(9975, Thread.currentThread().getStackTrace()[0]);
 		}
 	}
 
@@ -303,7 +332,7 @@ public final class StationAccessor extends Thread {
 		if (msg.contains(new StringBuilder().append(CONNECTION_ENDED))) {
 			Robot.getRobotLogger().fatal(
 					"connection to station lost; robot is closing");
-			Robot.exit(9973);
+			Robot.exit(9973, Thread.currentThread().getStackTrace()[0]);
 			return;
 		}
 
@@ -312,15 +341,18 @@ public final class StationAccessor extends Thread {
 					mInitialDataAnalyzer.parse(msg)))
 				Robot.getRobotLogger()
 						.warn("an attempt was made to change the initial data cache after it was created");
+			else
+				Robot.getRobotLogger().debug(
+						"accepted initial match data: " + mInitialDataCache);
 			return;
 		}
 
 		if (mPeriodicDataAnalyzer.test(msg)) {
-			mPeriodicDataCache.set(mPeriodicDataAnalyzer.parse(msg));
+			managePeriodicDataCache(mPeriodicDataAnalyzer.parse(msg));
 			mLock.lock();
 			try {
-				mHasDataArrived.signalAll();
 				mCurrentUpdateCount.set(mCurrentUpdateCount.get() + 1);
+				mHasDataArrived.signalAll();
 			} finally {
 				mLock.unlock();
 			}
@@ -330,15 +362,28 @@ public final class StationAccessor extends Thread {
 		Robot.getRobotLogger().fatal("unparseable message received: " + msg);
 	}
 
-	private Socket getConnection(int port) {
-		try {
-			return new Socket(InetAddress.getLoopbackAddress(), port);
-		} catch (IOException e) {
-			Robot.getRobotLogger().fatal(
-					"error while creating connection station", e);
-			System.exit(9970);
-			return null;
-		}
+	private void managePeriodicDataCache(PeriodicMatchData newData) {
+		if (!isPeriodicDataAvailable())
+			mPeriodicDataCache.set(newData);
+
+		StringBuilder enable = new StringBuilder();
+		StringBuilder gameType = new StringBuilder();
+
+		if (newData.isEnabled != mPeriodicDataCache.get().isEnabled)
+			enable.append("robot is now "
+					+ ((newData.isEnabled) ? "enabled!" : "disabled!"));
+
+		if (newData.gameType != mPeriodicDataCache.get().gameType)
+			gameType.append("the game has now entered " + newData.gameType
+					+ " stage!");
+
+		if (enable.length() != 0)
+			Robot.getRobotLogger().info(enable.toString());
+
+		if (gameType.length() != 0)
+			Robot.getRobotLogger().info(gameType.toString());
+
+		mPeriodicDataCache.set(newData);
 	}
 
 	private Scanner getStationReader(Socket socket) {
@@ -347,7 +392,7 @@ public final class StationAccessor extends Thread {
 		} catch (IOException e) {
 			Robot.getRobotLogger().fatal(
 					"error while creating scanner from station", e);
-			Robot.exit(9971);
+			Robot.exit(9971, Thread.currentThread().getStackTrace()[0]);
 			return null;
 		}
 	}
@@ -358,7 +403,7 @@ public final class StationAccessor extends Thread {
 		} catch (IOException e) {
 			Robot.getRobotLogger().fatal(
 					"error while creating stream to station", e);
-			Robot.exit(9972);
+			Robot.exit(9972, Thread.currentThread().getStackTrace()[0]);
 			return null;
 		}
 	}

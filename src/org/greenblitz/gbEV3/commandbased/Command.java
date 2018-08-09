@@ -30,7 +30,11 @@ public abstract class Command {
 			if (!requires(required))
 				throw new IllegalArgumentException("cannot require null subsystem");
 	}
-
+	
+	/**
+	 * Construct a 
+	 * @param interruptible
+	 */
 	public Command(boolean interruptible) {
 		m_interruptible = interruptible;
 	}
